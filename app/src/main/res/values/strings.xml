@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Global Cash Flow Monitor</string>
+
+    <string name="mapbox_access_token">pk.eyJ1IjoiZGVrYXRyYW4yMDA2IiwiYSI6ImNtcDJkZ2Z3dzBlcDUycXBvZTFyNWRqeDAifQ.pmuXLctB3xmaEj__bHz55w</string>
+</resources>
