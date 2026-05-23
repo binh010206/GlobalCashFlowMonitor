@@ -19,6 +19,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+// --- CÁC THƯ VIỆN BỔ SUNG ĐỂ SỬA LỖI ĐỎ LÒM ---
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import io.socket.client.IO
+import io.socket.client.Socket
+// ----------------------------------------------
 import com.example.globalcashflowmonitor.data.CountryData
 import com.example.globalcashflowmonitor.data.MockData
 import com.mapbox.geojson.Feature
@@ -39,7 +45,6 @@ import com.mapbox.maps.extension.style.layers.generated.lineLayer
 import com.mapbox.maps.extension.style.sources.addSource
 import com.mapbox.maps.extension.style.sources.generated.geoJsonSource
 import com.mapbox.maps.plugin.gestures.addOnMapClickListener
-import kotlinx.coroutines.delay
 import kotlin.math.pow
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,17 +59,31 @@ fun MapScreen() {
     var currentZoom by remember { mutableStateOf(3.0) }
     var isLegendExpanded by remember { mutableStateOf(false) }
 
-    // [DỌN ĐƯỜNG REAL-TIME 3S]: Vòng lặp chạy ngầm không giật lag UI
-    var tick by remember { mutableIntStateOf(0) }
+    // --- KẾT NỐI REAL-TIME VỚI SERVER NODE.JS BẰNG SOCKET.IO ---
+    var realTimeData by remember { mutableStateOf(MockData.topCountries) }
+
     LaunchedEffect(Unit) {
-        while (true) {
-            delay(3000) // 3 giây Reload thầm 1 lần
-            tick++
-            // TODO: Nối API Backend cào dữ liệu vào đây!
-            // Khi có data mới, mình chỉ việc cập nhật GeoJsonSource, bản đồ sẽ tự động nhúc nhích cột 3D.
+        try {
+            // 🚩 LƯU Ý SỐNG CÒN: Sửa "192.168.1.X" thành IPv4 mạng Wi-Fi của máy tính mày!
+            val socket: Socket = IO.socket("192.168.1.198")
+            socket.connect()
+
+            // FIX LỖI ÉP KIỂU: Khai báo rõ args là Array<Any>
+            socket.on("cashflow_update") { args: Array<Any> ->
+                if (args.isNotEmpty()) {
+                    val jsonString = args[0].toString()
+                    val listType = object : TypeToken<List<CountryData>>() {}.type
+                    val newData: List<CountryData> = Gson().fromJson(jsonString, listType)
+
+                    realTimeData = newData
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
+    // Bảng màu tháp 3D tương phản cao
     val colorMapTowers = mapOf(
         "GDP" to "#00FFFF", "FDI Inflow" to "#FFBF00", "Trade Balance" to "#FF007F",
         "Remittances" to "#00FF00", "FPI" to "#9D00FF", "Reserves" to "#FFFFFF",
@@ -85,6 +104,7 @@ fun MapScreen() {
         }
     }
 
+    // Thuật toán màu nhiệt chuẩn G8
     fun getG8SequentialColor(value: Double, g8Threshold: Double): String {
         val absVal = Math.abs(value)
         if (absVal >= g8Threshold) return "#D32F2F"
@@ -101,6 +121,7 @@ fun MapScreen() {
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+
         MapboxMap(
             modifier = Modifier.fillMaxSize(),
             mapInitOptionsFactory = { ctx ->
@@ -112,13 +133,12 @@ fun MapScreen() {
                 )
             }
         ) {
-            // Re-render khi đổi Tab, đổi Zoom, hoặc Bấm vào một quốc gia (để làm hiệu ứng sáng)
-            MapEffect(selectedTabs.toList(), currentZoom, selectedCountry, tick) { mapView ->
+            MapEffect(selectedTabs.toList(), currentZoom, selectedCountry, realTimeData) { mapView ->
                 val map = mapView.mapboxMap
                 mapView.mapboxMap.addOnCameraChangeListener { currentZoom = mapView.mapboxMap.cameraState.zoom }
 
                 map.getStyle { style ->
-                    // Dọn dẹp layer
+                    // 1. Dọn dẹp layer cũ
                     dataTabs.forEach { tab ->
                         if (style.styleLayerExists("layer-$tab")) style.removeStyleLayer("layer-$tab")
                         if (style.styleSourceExists("source-$tab")) style.removeStyleSource("source-$tab")
@@ -127,7 +147,7 @@ fun MapScreen() {
                     if (style.styleLayerExists("country-border-layer")) style.removeStyleLayer("country-border-layer")
 
                     val primaryTab = if (selectedTabs.isNotEmpty()) selectedTabs[0] else "GDP"
-                    val allValuesDesc = MockData.topCountries.map { Math.abs(getValueForTab(it, primaryTab)) }.sortedDescending()
+                    val allValuesDesc = realTimeData.map { Math.abs(getValueForTab(it, primaryTab)) }.sortedDescending()
                     val g8Threshold = if (allValuesDesc.size >= 8) allValuesDesc[7] else (allValuesDesc.firstOrNull() ?: 1.0)
 
                     val baseZoomOff = 3.0
@@ -135,14 +155,14 @@ fun MapScreen() {
                     val responsiveGap = 0.50 * (2.0.pow(baseZoomOff - currentZoom))
                     val selectedCountryId = selectedCountry?.id ?: ""
 
-                    // Vẽ tháp 3D
+                    // 2. Vẽ tháp 3D
                     selectedTabs.forEachIndexed { index, tabName ->
                         val row = index / 3
                         val col = index % 3
                         val offLng = (col - 1) * responsiveGap
                         val offLat = (1 - row) * responsiveGap
 
-                        val features = MockData.topCountries.map { country ->
+                        val features = realTimeData.map { country ->
                             val polygon = createResponsivePillarBase(country.lat, country.lng, responsiveSize, offLng, offLat)
                             val rawValue = getValueForTab(country, tabName)
                             val heightValue = Math.sqrt(Math.abs(rawValue)) * 50000.0
@@ -165,17 +185,17 @@ fun MapScreen() {
                         })
                     }
 
-                    // Tải bản đồ ranh giới
+                    // 3. Tải GeoJSON và vẽ nền, viền
                     if (!style.styleSourceExists("country-background-source")) {
                         style.addSource(geoJsonSource("country-background-source") {
                             data("https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_50m_admin_0_countries.geojson")
                         })
                     }
 
-                    // VẼ THẢM NỀN (HEATMAP)
+                    // Tính màu nền (HEATMAP)
                     val colorMatchArgs = mutableListOf<Expression>()
                     colorMatchArgs.add(Expression.get("iso_a2"))
-                    MockData.topCountries.forEach { country ->
+                    realTimeData.forEach { country ->
                         val valuePrimary = getValueForTab(country, primaryTab)
                         val colorIntensity = getG8SequentialColor(valuePrimary, g8Threshold)
                         colorMatchArgs.add(Expression.literal(country.id))
@@ -183,24 +203,23 @@ fun MapScreen() {
                     }
                     colorMatchArgs.add(Expression.literal("#1A1A1A"))
 
-                    // [FIX TRỌNG ĐIỂM CỦA MÀY ĐÂY]: HIỆU ỨNG OPACITY KHÔNG BAO GIỜ BỊ LỖI NỮA
+                    // Hiệu ứng Highlight nước đang chọn (100% sáng vs 55% mờ)
                     val opacityMatchArgs = mutableListOf<Expression>()
                     opacityMatchArgs.add(Expression.get("iso_a2"))
-                    opacityMatchArgs.add(Expression.literal(selectedCountryId)) // Nước nào có ID trùng khớp với nước đang chọn
-                    opacityMatchArgs.add(Expression.literal(1.0))              // -> Sáng rực rỡ 100%
-                    opacityMatchArgs.add(Expression.literal(0.55))             // -> Mặc định mờ 55%
+                    opacityMatchArgs.add(Expression.literal(selectedCountryId))
+                    opacityMatchArgs.add(Expression.literal(1.0))
+                    opacityMatchArgs.add(Expression.literal(0.55))
 
                     val countryBackgroundLayer = fillLayer("country-background-layer", "country-background-source") {
                         fillColor(Expression.match(*colorMatchArgs.toTypedArray()))
-                        // Sử dụng mảng để truyền tham số, Mapbox không thể bắt bẻ được!
                         fillOpacity(Expression.match(*opacityMatchArgs.toTypedArray()))
                     }
 
-                    // VẼ VIỀN QUỐC GIA TRẮNG NỔI BẬT
+                    // VẼ VIỀN QUỐC GIA TRẮNG DỊU MẮT
                     val countryBorderLayer = lineLayer("country-border-layer", "country-background-source") {
                         lineColor("#FFFFFF")
-                        lineWidth(1.1)
-                        lineOpacity(0.36)
+                        lineWidth(1.6)
+                        lineOpacity(0.35)
                     }
 
                     // Xếp layer
@@ -230,7 +249,7 @@ fun MapScreen() {
                                 val iso = feature.getStringProperty("iso_a2") ?: feature.getStringProperty("country_id_3d")
                                 val name = feature.getStringProperty("NAME") ?: feature.getStringProperty("NAME_EN") ?: feature.getStringProperty("country_name_3d") ?: "Quốc gia vãng lai"
 
-                                val found = MockData.topCountries.find { it.id == iso }
+                                val found = realTimeData.find { it.id == iso }
                                 if (found != null) {
                                     selectedCountry = found
                                 } else {
@@ -250,7 +269,7 @@ fun MapScreen() {
             }
         }
 
-        // --- GIAO DIỆN CHÚ THÍCH (GIỮ NGUYÊN) ---
+        // --- GIAO DIỆN CHÚ THÍCH (LEGEND BOX) ---
         Box(modifier = Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 62.dp)) {
             if (isLegendExpanded) {
                 Column(
@@ -266,13 +285,18 @@ fun MapScreen() {
                     LegendItem("#F57C00", "Quy mô cao (Cận Top)")
                     LegendItem("#FBC02D", "Quy mô trung bình")
                     LegendItem("#FFF59D", "Quy mô nhỏ")
-                    LegendItem("#1A1A1A", "Chưa có dữ liệu")
+                    LegendItem("#1A1A1A", "Chưa có dữ liệu real-time")
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("CỘT DÒNG TIỀN ĐANG BẬT:", color = Color.Green, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(4.dp))
 
                     if (selectedTabs.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text("CỘT 3D ĐANG HIỂN THỊ:", color = Color.Green, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        selectedTabs.forEach { tabName -> LegendItem(colorMapTowers[tabName] ?: "#808080", "Tháp $tabName") }
+                        selectedTabs.forEach { tabName ->
+                            LegendItem(colorMapTowers[tabName] ?: "#808080", "Tháp $tabName")
+                        }
+                    } else {
+                        Text("Chưa bật cột nào trên Menu", color = Color.Gray, fontSize = 11.sp)
                     }
                 }
             } else {
@@ -312,7 +336,7 @@ fun MapScreen() {
             }
         }
 
-// --- BẢNG BOTTOM SHEET ĐỘNG ---
+        // --- BẢNG BOTTOM SHEET ĐỘNG ---
         if (selectedCountry != null) {
             ModalBottomSheet(
                 onDismissRequest = { selectedCountry = null }, sheetState = sheetState,
@@ -330,8 +354,9 @@ fun MapScreen() {
                         } else {
                             selectedTabs.forEach { tabName ->
                                 item {
-                                    val valueForThisTab = getValueForTab(selectedCountry!!, tabName)
-                                    // [FIX]: LẤY ĐÚNG MÀU TỪ TỪ ĐIỂN ĐỂ TÔ CHO TỪNG DÒNG
+                                    val currentCountryData = realTimeData.find { it.id == selectedCountry!!.id }
+                                    val valueForThisTab = if (currentCountryData != null) getValueForTab(currentCountryData, tabName) else Double.NaN
+
                                     val rowColorHex = colorMapTowers[tabName] ?: "#FFFFFF"
                                     InfoRow(
                                         title = tabName,
