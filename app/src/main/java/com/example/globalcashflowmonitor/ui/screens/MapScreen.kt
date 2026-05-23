@@ -61,7 +61,7 @@ fun MapScreen() {
             delay(3000) // 3 giây Reload thầm 1 lần
             tick++
             // TODO: Nối API Backend cào dữ liệu vào đây!
-            // Khi có data mới, thì chỉ việc cập nhật GeoJsonSource, bản đồ sẽ tự động nhúc nhích cột 3D.
+            // Khi có data mới, mình chỉ việc cập nhật GeoJsonSource, bản đồ sẽ tự động nhúc nhích cột 3D.
         }
     }
 
@@ -331,7 +331,7 @@ fun MapScreen() {
                             selectedTabs.forEach { tabName ->
                                 item {
                                     val valueForThisTab = getValueForTab(selectedCountry!!, tabName)
-                                    //  LẤY ĐÚNG MÀU TỪ TỪ ĐIỂN ĐỂ TÔ CHO TỪNG DÒNG
+                                    // [FIX]: LẤY ĐÚNG MÀU TỪ TỪ ĐIỂN ĐỂ TÔ CHO TỪNG DÒNG
                                     val rowColorHex = colorMapTowers[tabName] ?: "#FFFFFF"
                                     InfoRow(
                                         title = tabName,
