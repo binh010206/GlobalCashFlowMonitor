@@ -36,7 +36,7 @@ fun AiScreen() {
     var lockoutStartTime by remember { mutableStateOf(0L) }
     var timeRemainingText by remember { mutableStateOf("") }
 
-    // THUẬT TOÁN ĐẾM NGƯỢC (Chạy ngầm không làm đơ máy)
+    // THUẬT TOÁN ĐẾM NGƯỢC
     LaunchedEffect(aiUsageLeft, lockoutStartTime) {
         if (aiUsageLeft == 0 && lockoutStartTime > 0) {
             while (true) {
@@ -51,7 +51,7 @@ fun AiScreen() {
                 val cooldownTime = 15L * 1000
 
                 if (timePassed >= cooldownTime) {
-                    aiUsageLeft = 5 // Hồi máu lại 5 lượt!
+                    aiUsageLeft = 5
                     lockoutStartTime = 0L
                     timeRemainingText = ""
                     break
@@ -68,7 +68,7 @@ fun AiScreen() {
         }
     }
 
-    // Kho câu trả lời ảo (Mock Data) cho đỡ chán
+    // Kho câu trả lời ảo (Mock Data)
     val fakeReplies = listOf(
         "Theo dữ liệu của Ngân hàng Thế giới, dòng tiền này đang chịu ảnh hưởng từ lạm phát.",
         "Tín hiệu khả quan! FDI vào khu vực này đang tăng trưởng ổn định trong quý vừa qua.",

@@ -15,6 +15,8 @@ import com.example.globalcashflowmonitor.ui.theme.GlobalCashFlowMonitorTheme
 import com.example.globalcashflowmonitor.ui.screens.MapScreen
 import com.example.globalcashflowmonitor.ui.screens.SettingsScreen
 import com.example.globalcashflowmonitor.ui.screens.AiScreen
+import com.example.globalcashflowmonitor.ui.screens.StatsScreen
+
 
 
 
@@ -38,10 +40,10 @@ class MainActivity : ComponentActivity() {
 
                         // ĐIỀU PHỐI MÀN HÌNH CHÍNH
                         when (currentScreen) {
-                            // Số 0: Hiện màn hình Bản đồ (Tạm thời để chữ chờ mình code file MapScreen.kt)
+
                             0 -> MapScreen()
                             // Số 1: Hiện màn hình Thống kê
-                            1 -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Màn hình Thống kê", color = Color.White) }
+                            1 -> StatsScreen()
 
                             // Số 2: Hiện màn hình AI
                             2 -> AiScreen()
