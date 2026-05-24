@@ -1,11 +1,14 @@
 package com.example.globalcashflowmonitor.ui.screens
 
-import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -14,15 +17,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
+// Lịch sử chat giả lập
+data class ChatSession(val id: String, val title: String, val date: String)
 data class ChatMessage(
     val text: String,
     val isUser: Boolean
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AiScreen() {
     val context = LocalContext.current
@@ -35,6 +42,18 @@ fun AiScreen() {
     // STATE: Lưu thời gian bắt đầu khóa và Text hiển thị đồng hồ đếm ngược
     var lockoutStartTime by remember { mutableStateOf(0L) }
     var timeRemainingText by remember { mutableStateOf("") }
+
+    // STATE CHO LỊCH SỬ CHAT
+    var showHistorySheet by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    // Dữ liệu lịch sử giả lập (Mock Data)
+    val mockHistory = listOf(
+        ChatSession("1", "Phân tích FDI khu vực Đông Nam Á", "Hôm nay"),
+        ChatSession("2", "Dự báo lạm phát Mỹ năm 2026", "Hôm qua"),
+        ChatSession("3", "So sánh cán cân thương mại VN-TQ", "2 ngày trước"),
+        ChatSession("4", "Tác động của dự trữ ngoại hối Nhật Bản", "Tuần trước")
+    )
+
 
     // THUẬT TOÁN ĐẾM NGƯỢC
     LaunchedEffect(aiUsageLeft, lockoutStartTime) {
@@ -85,7 +104,12 @@ fun AiScreen() {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
-                Text("AI Advisor", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "AI Advisor",
+                    color = Color.White,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold
+                )
                 Text(
                     // HIỆN ĐỒNG HỒ ĐẾM NGƯỢC
                     text = if (aiUsageLeft > 0) "Chế độ: Khách (Guest)" else "MỞ KHÓA SAU: $timeRemainingText",
@@ -93,19 +117,28 @@ fun AiScreen() {
                     fontSize = 12.sp, fontWeight = FontWeight.Bold
                 )
             }
-            Surface(
-                color = if (aiUsageLeft > 0) Color(0xFF005555) else Color.Red.copy(alpha = 0.2f),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(
-                    text = if (aiUsageLeft > 0) "Còn lại: $aiUsageLeft/5" else "Đang khóa",
-                    color = if (aiUsageLeft > 0) Color.Cyan else Color.Red,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    fontWeight = FontWeight.Bold, fontSize = 12.sp
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = { showHistorySheet = true },
+                    modifier = Modifier.background(Color(0xFF1E1E1E), RoundedCornerShape(12.dp))
+                        .size(40.dp)
+                ) {
+                    Icon(Icons.Rounded.History, contentDescription = "Lịch sử", tint = Color.Cyan)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Surface(
+                    color = if (aiUsageLeft > 0) Color(0xFF005555) else Color.Red.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = if (aiUsageLeft > 0) "Còn lại: $aiUsageLeft/5" else "Đang khóa",
+                        color = if (aiUsageLeft > 0) Color.Cyan else Color.Red,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        fontWeight = FontWeight.Bold, fontSize = 12.sp
+                    )
+                }
             }
         }
-
         HorizontalDivider(color = Color.DarkGray, modifier = Modifier.padding(bottom = 16.dp))
 
         // VÙNG HIỂN THỊ TIN NHẮN
@@ -167,6 +200,51 @@ fun AiScreen() {
                 modifier = Modifier.size(48.dp)
             ) {
                 Icon(Icons.Rounded.Send, contentDescription = "Gửi", tint = Color.Black)
+            }
+        }
+    }
+
+    // BOTTOM SHEET HIỂN THỊ LỊCH SỬ CHAT
+    if (showHistorySheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showHistorySheet = false },
+            sheetState = sheetState,
+            containerColor = Color(0xFF1E1E1E),
+            dragHandle = { BottomSheetDefaults.DragHandle(color = Color.Gray) }
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp).padding(bottom = 32.dp)) {
+                Text("Lịch sử tư vấn AI", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(mockHistory) { session ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFF2C2C2C), RoundedCornerShape(12.dp))
+                                .clickable {
+                                    // TODO: Load lại tin nhắn của session này khi click
+                                    showHistorySheet = false
+                                }
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Rounded.ChatBubbleOutline, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = session.title,
+                                    color = Color.White,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(text = session.date, color = Color.Gray, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
             }
         }
     }
