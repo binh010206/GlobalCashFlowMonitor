@@ -14,7 +14,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(
+    onLogout: () -> Unit
+) {
     // Các biến trạng thái (State) để lưu lựa chọn của người dùng
     var isDarkMode by remember { mutableStateOf(true) }
     var isColorBlindMode by remember { mutableStateOf(false) }
@@ -68,26 +70,26 @@ fun SettingsScreen() {
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // --- PHẦN 3: TÀI KHOẢN (Dọn đường cho tính năng Thu phí / AI) ---
-        Text("TÀI KHOẢN (Sắp ra mắt)", color = Color.Cyan, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        // --- PHẦN 3: TÀI KHOẢN
+        Text("TÀI KHOẢN", color = Color.Cyan, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(12.dp))
 
         Button(
-            onClick = { /* TODO: Kết nối Firebase bưng ra màn hình Đăng nhập */ },
+            onClick = { onLogout() },
             modifier = Modifier.fillMaxWidth().height(50.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C2C)),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF1744).copy(alpha = 0.15f)),
             shape = RoundedCornerShape(12.dp)
         ) {
-            Icon(Icons.Rounded.Login, contentDescription = null, tint = Color.White)
+            Icon(Icons.Rounded.ExitToApp, contentDescription = null, tint = Color(0xFFFF1744))
             Spacer(modifier = Modifier.width(12.dp))
-            Text("Đăng nhập / Đăng ký", color = Color.White, fontSize = 16.sp)
+            Text("Đăng xuất tài khoản", color = Color(0xFFFF1744), fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
         // Thông báo số lượt AI dành cho Guest
         Text(
-            text = "Bạn đang dùng quyền Khách (Guest). Còn 5/5 lượt hỏi AI miễn phí.",
+            text = "Phiên đăng nhập đang hoạt động ổn định.",
             color = Color.Gray,
             fontSize = 12.sp
         )
