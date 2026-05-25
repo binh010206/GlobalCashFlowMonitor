@@ -1,4 +1,4 @@
-package com.example.globalcashflowmonitor.ui.screens
+    package com.example.globalcashflowmonitor.ui.screens
 
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -65,7 +65,7 @@ fun MapScreen() {
     LaunchedEffect(Unit) {
         try {
             // 🚩 LƯU Ý SỐNG CÒN: Sửa "192.168.1.X" thành IPv4 mạng Wi-Fi của máy tính mày!
-            val socket: Socket = IO.socket("192.168.1.198")
+            val socket: Socket = IO.socket("172.26.33.128")
             socket.connect()
 
             // FIX LỖI ÉP KIỂU: Khai báo rõ args là Array<Any>

@@ -56,6 +56,7 @@ dependencies {
     // Mapbox
     implementation("com.mapbox.maps:android:11.2.0")
     implementation("com.mapbox.extension:maps-compose:11.2.0")
+    implementation("com.mapbox.plugin:maps-gestures:11.2.0")
 
     // Ktor
     implementation("io.ktor:ktor-client-core:2.3.7")
