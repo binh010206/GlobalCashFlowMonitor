@@ -21,7 +21,7 @@ router.post('/', async (req, res) => {
         Câu hỏi: "${userMessage}"
         `;
 
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
         const result = await model.generateContent(systemPrompt);
         let responseText = result.response.text().replace(/```json/g, "").replace(/```/g, "").trim();
         
