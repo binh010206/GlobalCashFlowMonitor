@@ -17,41 +17,77 @@ mongoose.connect(uri)
   .catch(err => console.log("❌ Lỗi MongoDB:", err));
 
 // ==========================================
-// 2. KHO DỮ LIỆU TỌA ĐỘ CÁC NƯỚC LỚN
+// 2. KHO DỮ LIỆU 40 QUỐC GIA 
 // ==========================================
 const countries = [
-    { id: "VN", name: "Việt Nam", lat: 16.0544, lng: 108.2022, gdp: 430 }, // Tâm điểm Đà Nẵng
-    { id: "US", name: "Hoa Kỳ", lat: 39.8283, lng: -98.5795, gdp: 25460 },
-    { id: "JP", name: "Nhật Bản", lat: 36.2048, lng: 138.2529, gdp: 4230 },
-    { id: "SG", name: "Singapore", lat: 1.3521, lng: 103.8198, gdp: 466 },
-    { id: "KR", name: "Hàn Quốc", lat: 35.9078, lng: 127.7669, gdp: 1665 },
-    { id: "CN", name: "Trung Quốc", lat: 35.8617, lng: 104.1954, gdp: 17963 }
+    { id: "VN", name: "Việt Nam", lat: 16.0544, lng: 108.2022, flagUrl: "https://flagcdn.com/w80/vn.png" }, // Tâm điểm Đà Nẵng
+    { id: "US", name: "Hoa Kỳ", lat: 39.82, lng: -98.57, flagUrl: "https://flagcdn.com/w80/us.png" },
+    { id: "CN", name: "Trung Quốc", lat: 35.86, lng: 104.19, flagUrl: "https://flagcdn.com/w80/cn.png" },
+    { id: "JP", name: "Nhật Bản", lat: 36.20, lng: 138.25, flagUrl: "https://flagcdn.com/w80/jp.png" },
+    { id: "KR", name: "Hàn Quốc", lat: 35.90, lng: 127.76, flagUrl: "https://flagcdn.com/w80/kr.png" },
+    { id: "SG", name: "Singapore", lat: 1.35, lng: 103.81, flagUrl: "https://flagcdn.com/w80/sg.png" },
+    { id: "DE", name: "Đức", lat: 51.16, lng: 10.45, flagUrl: "https://flagcdn.com/w80/de.png" },
+    { id: "GB", name: "Anh", lat: 55.37, lng: -3.43, flagUrl: "https://flagcdn.com/w80/gb.png" },
+    { id: "FR", name: "Pháp", lat: 46.22, lng: 2.21, flagUrl: "https://flagcdn.com/w80/fr.png" },
+    { id: "IN", name: "Ấn Độ", lat: 20.59, lng: 78.96, flagUrl: "https://flagcdn.com/w80/in.png" },
+    { id: "RU", name: "Nga", lat: 61.52, lng: 105.31, flagUrl: "https://flagcdn.com/w80/ru.png" },
+    { id: "CA", name: "Canada", lat: 56.13, lng: -106.34, flagUrl: "https://flagcdn.com/w80/ca.png" },
+    { id: "AU", name: "Úc", lat: -25.27, lng: 133.77, flagUrl: "https://flagcdn.com/w80/au.png" },
+    { id: "BR", name: "Brazil", lat: -14.23, lng: -51.92, flagUrl: "https://flagcdn.com/w80/br.png" },
+    { id: "MX", name: "Mexico", lat: 23.63, lng: -102.55, flagUrl: "https://flagcdn.com/w80/mx.png" },
+    { id: "ID", name: "Indonesia", lat: -0.78, lng: 113.92, flagUrl: "https://flagcdn.com/w80/id.png" },
+    { id: "MY", name: "Malaysia", lat: 4.21, lng: 101.97, flagUrl: "https://flagcdn.com/w80/my.png" },
+    { id: "TH", name: "Thái Lan", lat: 15.87, lng: 100.99, flagUrl: "https://flagcdn.com/w80/th.png" },
+    { id: "PH", name: "Philippines", lat: 12.87, lng: 121.77, flagUrl: "https://flagcdn.com/w80/ph.png" },
+    { id: "NL", name: "Hà Lan", lat: 52.13, lng: 5.29, flagUrl: "https://flagcdn.com/w80/nl.png" },
+    { id: "CH", name: "Thụy Sĩ", lat: 46.81, lng: 8.22, flagUrl: "https://flagcdn.com/w80/ch.png" },
+    { id: "SA", name: "Ả Rập Xê Út", lat: 23.88, lng: 45.07, flagUrl: "https://flagcdn.com/w80/sa.png" },
+    { id: "AE", name: "UAE", lat: 23.42, lng: 53.84, flagUrl: "https://flagcdn.com/w80/ae.png" },
+    { id: "ZA", name: "Nam Phi", lat: -30.55, lng: 22.93, flagUrl: "https://flagcdn.com/w80/za.png" },
+    { id: "TR", name: "Thổ Nhĩ Kỳ", lat: 38.96, lng: 35.24, flagUrl: "https://flagcdn.com/w80/tr.png" },
+    { id: "ES", name: "Tây Ban Nha", lat: 40.46, lng: -3.74, flagUrl: "https://flagcdn.com/w80/es.png" },
+    { id: "TW", name: "Đài Loan", lat: 23.69, lng: 120.96, flagUrl: "https://flagcdn.com/w80/tw.png" },
+    { id: "HK", name: "Hong Kong", lat: 22.31, lng: 114.16, flagUrl: "https://flagcdn.com/w80/hk.png" },
+    { id: "SE", name: "Thụy Điển", lat: 60.12, lng: 18.64, flagUrl: "https://flagcdn.com/w80/se.png" },
+    { id: "NO", name: "Na Uy", lat: 60.47, lng: 8.46, flagUrl: "https://flagcdn.com/w80/no.png" },
+    { id: "DK", name: "Đan Mạch", lat: 56.26, lng: 9.50, flagUrl: "https://flagcdn.com/w80/dk.png" },
+    { id: "FI", name: "Phần Lan", lat: 61.92, lng: 25.74, flagUrl: "https://flagcdn.com/w80/fi.png" },
+    { id: "NZ", name: "New Zealand", lat: -40.90, lng: 174.88, flagUrl: "https://flagcdn.com/w80/nz.png" },
+    { id: "IL", name: "Israel", lat: 31.04, lng: 34.85, flagUrl: "https://flagcdn.com/w80/il.png" },
+    { id: "IE", name: "Ireland", lat: 53.14, lng: -7.69, flagUrl: "https://flagcdn.com/w80/ie.png" },
+    { id: "PL", name: "Ba Lan", lat: 51.91, lng: 19.14, flagUrl: "https://flagcdn.com/w80/pl.png" },
+    { id: "CL", name: "Chile", lat: -35.67, lng: -71.54, flagUrl: "https://flagcdn.com/w80/cl.png" },
+    { id: "AR", name: "Argentina", lat: -38.41, lng: -63.61, flagUrl: "https://flagcdn.com/w80/ar.png" },
+    { id: "IT", name: "Ý", lat: 41.87, lng: 12.56, flagUrl: "https://flagcdn.com/w80/it.png" },
+    { id: "BE", name: "Bỉ", lat: 50.50, lng: 4.46, flagUrl: "https://flagcdn.com/w80/be.png" }
 ];
 
 // ==========================================
-// 3. THUẬT TOÁN GIẢ LẬP DÒNG TIỀN (MOCK DATA)
+// 3. THUẬT TOÁN GIẢ LẬP DÒNG TIỀN (Bắn từ 39 nước về VN)
 // ==========================================
 function generateRandomFlows() {
     const flows = [];
-    const types = ["FDI", "TRADE"]; // FDI: Xanh nhạt, TRADE: Cam
+    const types = ["FDI", "TRADE", "REMITTANCE"]; // Thêm Kiều hối (Màu tím)
     
-    // Mỗi nhịp sẽ có 2 đến 3 luồng tiền bay cùng lúc
-    const numFlows = Math.floor(Math.random() * 2) + 2; 
+    if (Math.random() < 0.3) return flows; // 30% thời gian màn hình tĩnh lặng
+    
+    const numFlows = Math.floor(Math.random() * 3) + 1; // Nổ từ 1-3 thương vụ cùng lúc
+    
+    // Tự động lấy danh sách 39 nước (Bỏ Việt Nam ra khỏi danh sách nguồn)
+    const sources = countries.map(c => c.id).filter(id => id !== "VN");
     
     for (let i = 0; i < numFlows; i++) {
-        // Lấy ngẫu nhiên 1 nước làm nguồn phát
-        const sources = ["US", "JP", "SG", "KR", "CN"];
         const sourceId = sources[Math.floor(Math.random() * sources.length)];
-        
-        // Mặc định cho mọi đường tiền đáp xuống Việt Nam để demo cho đẹp
         const targetId = "VN"; 
         
+        let amountBase = Math.pow(Math.random(), 3); 
+        let finalAmount = (amountBase * 5.4) + 0.1; 
+
         flows.push({
             id: `flow_${Date.now()}_${i}`,
             sourceId: sourceId,
             targetId: targetId,
-            // Số tiền ngẫu nhiên từ 0.5 đến 10.5 Tỷ USD
-            amount: parseFloat((Math.random() * 10 + 0.5).toFixed(1)), 
+            amount: parseFloat(finalAmount.toFixed(2)),
             type: types[Math.floor(Math.random() * types.length)]
         });
     }
