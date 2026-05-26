@@ -37,10 +37,10 @@ router.post('/', async (req, res) => {
                 "X-Title": "Global Cash Flow",
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({
-                "model": "google/gemini-2.0-flash-thinking-exp:free", // 🌟 CON NÀY ĐANG LIVE 100% FREE
-                "messages": [{ "role": "user", "content": systemPrompt }]
-            })
+           body: JSON.stringify({
+    "model": "openrouter/auto", // 🌟 Điền chữ này để hệ thống tự điều phối con AI đang free
+    "messages": [{ "role": "user", "content": systemPrompt }]
+})
         });
 
         const jsonRes = await response.json();
