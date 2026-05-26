@@ -29,16 +29,24 @@ router.post('/', async (req, res) => {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                "model": "google/gemini-1.5-flash", 
-                "messages": [{ "role": "user", "content": systemPrompt }]
-            })
+             "model": "google/gemini-2.5-flash:free", 
+             "messages": [{ "role": "user", "content": systemPrompt }]
+})
         });
 
         const jsonRes = await response.json();
         
         // Trích xuất văn bản JSON mà AI sinh ra
-        let responseText = jsonRes.choices[0].message.content;
-        responseText = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
+        if (!jsonRes.choices || jsonRes.choices.length === 0) {
+    console.error("OpenRouter Error Payload:", jsonRes);
+    return res.status(200).json({ 
+        success: true, 
+        data: { reply: "AI đang bận phân tích dòng tiền, thử lại sau mậy!", action: "NONE", targetId: "" } 
+    });
+}
+
+let responseText = jsonRes.choices[0].message.content;
+responseText = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
         
         const aiCommand = JSON.parse(responseText);
         res.status(200).json({ success: true, data: aiCommand });
