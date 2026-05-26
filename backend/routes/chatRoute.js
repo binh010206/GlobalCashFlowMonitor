@@ -40,9 +40,9 @@ const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                "model": "meta-llama/llama-3.1-8b-instruct:free", 
-                "messages": [{ "role": "user", "content": systemPrompt }]
-            })
+    "model": "mistralai/mistral-7b-instruct:free", 
+    "messages": [{ "role": "user", "content": systemPrompt }]
+})
         });
 
         const jsonRes = await response.json();
