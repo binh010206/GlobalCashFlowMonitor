@@ -31,10 +31,12 @@ router.post('/', async (req, res) => {
         `;
 
         // 2. Gọi AI Llama 3.1 (Bản 8 Tỷ tham số) của Facebook hoàn toàn miễn phí
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
             headers: {
                 "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                "HTTP-Referer": "https://globalcashflowbackend.onrender.com", // 🌟 BẮT BUỘC ĐỂ XÀI FREE
+                "X-Title": "Global Cash Flow App", // 🌟 BẮT BUỘC ĐỂ XÀI FREE
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
@@ -45,8 +47,9 @@ router.post('/', async (req, res) => {
 
         const jsonRes = await response.json();
 
-        // Xử lý nếu API OpenRouter lỗi
+        // 🌟 NẾU LỖI NỮA, NÓ SẼ IN RA LOG ĐỎ TRÊN RENDER ĐỂ ANH EM MÌNH BẮT BỆNH
         if (!jsonRes.choices || jsonRes.choices.length === 0) {
+            console.error("Chi tiết lỗi từ OpenRouter:", JSON.stringify(jsonRes));
             return res.status(200).json({ 
                 success: true, 
                 data: { reply: "Llama AI đang bận, vui lòng thử lại.", action: "NONE", targetId: "" } 
