@@ -21,41 +21,42 @@ router.post('/', async (req, res) => {
         Câu hỏi của user: "${userMessage}"
         `;
 
-        // Gọi API lên OpenRouter trung chuyển sang Gemini 1.5 Flash (Bao sống, không bóp limit)
+        // 🌟 GỌI THẲNG BẰNG KEY THẬT, DẸP BIẾN MÔI TRƯỜNG
         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
             headers: {
-                "Authorization": `Bearer ${process.env.GEMINI_API_KEY}`, // Điền key OpenRouter trên Render
+                "Authorization": "Bearer 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",
+                "HTTP-Referer": "https://globalcashflowbackend.onrender.com", 
+                "X-Title": "Global Cash Flow",
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-    "model": "google/gemini-2.0-flash-exp:free", 
-    "messages": [{ "role": "user", "content": systemPrompt }]
-})
+                "model": "openrouter/free", 
+                "messages": [{ "role": "user", "content": systemPrompt }]
+            })
         });
 
         const jsonRes = await response.json();
         
-        // Trích xuất văn bản JSON mà AI sinh ra
         if (!jsonRes.choices || jsonRes.choices.length === 0) {
-    console.error("OpenRouter Error Payload:", jsonRes);
-    return res.status(200).json({ 
-        success: true, 
-        data: { reply: "AI đang bận phân tích dòng tiền, thử lại sau mậy!", action: "NONE", targetId: "" } 
-    });
-}
+            console.error("Lỗi AI trả về:", jsonRes);
+            return res.status(200).json({ 
+                success: true, 
+                data: { reply: "Lỗi OpenRouter: " + (jsonRes.error?.message || "Không rõ"), action: "NONE", targetId: "" } 
+            });
+        }
 
-let responseText = jsonRes.choices[0].message.content;
-responseText = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
+        let responseText = jsonRes.choices[0].message.content;
+        responseText = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
         
         const aiCommand = JSON.parse(responseText);
         res.status(200).json({ success: true, data: aiCommand });
 
     } catch (error) {
-        console.error("Lỗi OpenRouter AI Route:", error);
+        console.error("Lỗi Server:", error);
         res.status(500).json({ 
             success: false, 
-            data: { reply: "Hệ thống AI đang bảo trì vĩ mô.", action: "NONE", targetId: "" } 
+            data: { reply: "Sập nguồn Server Nodejs: " + error.message, action: "NONE", targetId: "" } 
         });
     }
 });
