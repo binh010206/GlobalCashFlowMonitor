@@ -97,11 +97,13 @@ fun MainAppFlow() {
                         // TAB FREE: Map và Stats
                         0 -> MapScreen(
                             isLoggedIn = isLoggedIn,
+                            isDarkMode = isDarkMode,
                             onNavigateToLogin = { authScreenType = "LOGIN"; showAuthScreen = true }
                         )
 
                         2 -> StatsScreen(
                             isLoggedIn = isLoggedIn,
+                            isDarkMode = isDarkMode,
                             onNavigateToLogin = { authScreenType = "LOGIN"; showAuthScreen = true }
                         )
 

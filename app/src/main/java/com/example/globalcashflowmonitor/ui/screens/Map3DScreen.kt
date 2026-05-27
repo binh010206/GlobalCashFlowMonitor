@@ -109,6 +109,8 @@ fun Map3DScreen(onClose: () -> Unit) {
             update = { mapView ->
                 val mapboxMap = mapView.getMapboxMap()
 
+
+
                 // Góc Camera chuẩn để thấy hòn đảo nổi
                 mapboxMap.setCamera(
                     CameraOptions.Builder()

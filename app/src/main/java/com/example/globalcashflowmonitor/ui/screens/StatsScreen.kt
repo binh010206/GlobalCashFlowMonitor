@@ -124,7 +124,7 @@ fun loadGeoJsonFromAsset(context: Context, fileName: String): String? {
 // ====================================================
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StatsScreen(isLoggedIn: Boolean, onNavigateToLogin: () -> Unit) {
+fun StatsScreen(isLoggedIn: Boolean,isDarkMode: Boolean, onNavigateToLogin: () -> Unit) {
     var show3DPremiumView by remember { mutableStateOf(false) }
 
     if (show3DPremiumView) {
@@ -182,6 +182,12 @@ fun StatsScreen(isLoggedIn: Boolean, onNavigateToLogin: () -> Unit) {
         it.name.contains(searchQuery, ignoreCase = true) || it.id.contains(searchQuery, ignoreCase = true)
     }
 
+    val textColor = if (isDarkMode) Color.White else Color.Black
+    val subTextColor = if (isDarkMode) Color.Gray else Color.DarkGray
+    val cardBgColor = if (isDarkMode) Color(0xFF161622) else Color.White
+    val borderColor = if (isDarkMode) Color(0xFF2A2A35) else Color(0xFFE5E7EB)
+    val searchBgColor = if (isDarkMode) Color(0xFF1E1E24) else Color(0xFFF9FAFB)
+
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -194,7 +200,7 @@ fun StatsScreen(isLoggedIn: Boolean, onNavigateToLogin: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.Analytics, contentDescription = null, tint = Color(0xFFFFC107), modifier = Modifier.size(28.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("THỐNG KÊ THỜI GIAN THỰC", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Black)
+                    Text("THỐNG KÊ THỜI GIAN THỰC", color = textColor, fontSize = 18.sp, fontWeight = FontWeight.Black)
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.background(Color(0xFF1E1E24), RoundedCornerShape(20.dp))
@@ -217,9 +223,12 @@ fun StatsScreen(isLoggedIn: Boolean, onNavigateToLogin: () -> Unit) {
                 keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFF00B8D4), unfocusedBorderColor = Color(0xFF2A2A35),
-                    focusedContainerColor = Color(0xFF161622), unfocusedContainerColor = Color(0xFF161622),
-                    focusedTextColor = Color.White, unfocusedTextColor = Color.White
+                    focusedBorderColor = Color(0xFF00B8D4),
+                    unfocusedBorderColor = borderColor, // Dùng biến
+                    focusedContainerColor = searchBgColor,
+                    unfocusedContainerColor = searchBgColor,
+                    focusedTextColor = textColor,
+                    unfocusedTextColor = textColor
                 ),
                 modifier = Modifier.fillMaxWidth().height(52.dp)
             )
@@ -252,6 +261,7 @@ fun StatsScreen(isLoggedIn: Boolean, onNavigateToLogin: () -> Unit) {
                     tabName = selectedTab,
                     history = countryHistory,
                     isPinned = isPinned,
+                    isDarkMode = isDarkMode,
                     onPinClick = {
                         if (isLoggedIn) {
                             sharedPref.edit().putString("PINNED_COUNTRY", detailedCountry.id).apply()
@@ -278,6 +288,7 @@ fun StatsScreen(isLoggedIn: Boolean, onNavigateToLogin: () -> Unit) {
                         rank = realTimeData.indexOf(country) + 1, country = country, value = currentValue,
                         diff = abs(currentValue - previousValue), isUp = currentValue >= previousValue,
                         isSelected = country.id == detailedCountryId,
+                        isDarkMode = isDarkMode,
                         onClick = {
                             detailedCountryId = country.id
                             focusManager.clearFocus()
@@ -363,6 +374,7 @@ fun DetailedChartPanel(
     tabName: String,
     history: List<Double>,
     isPinned: Boolean = false,
+    isDarkMode: Boolean,
     onPinClick: () -> Unit = {}
 ) {
     val currentValue = history.lastOrNull() ?: 0.0
@@ -373,15 +385,20 @@ fun DetailedChartPanel(
 
     var showLegend by remember { mutableStateOf(false) }
 
+    val bgColor = if (isDarkMode) Color(0xFF161622) else Color.White
+    val borderColor = if (isDarkMode) Color(0xFF2A2A35) else Color(0xFFE5E7EB)
+    val textColor = if (isDarkMode) Color.White else Color.Black
+    val legendBgColor = if (isDarkMode) Color(0xFF1E1E28) else Color(0xFFF3F4F6)
+
     Column(
-        modifier = Modifier.fillMaxWidth().background(Color(0xFF161622), RoundedCornerShape(16.dp)).border(1.dp, Color(0xFF2A2A35), RoundedCornerShape(16.dp)).padding(16.dp)
+        modifier = Modifier.fillMaxWidth().background(bgColor, RoundedCornerShape(16.dp)).border(1.dp, borderColor, RoundedCornerShape(16.dp)).padding(16.dp)
     ) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(text = getFlagEmoji(country.id), fontSize = 24.sp)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = country.name, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(text = country.name, color = textColor, fontSize = 20.sp, fontWeight = FontWeight.Bold)
 
                     IconButton(onClick = onPinClick, modifier = Modifier.size(32.dp)) {
                         Icon(imageVector = Icons.Rounded.PushPin, contentDescription = "Ghim", tint = if (isPinned) Color(0xFFFFD600) else Color(0xFF444455))
@@ -493,8 +510,7 @@ fun DetailedChartPanel(
                                 drawPath(path = trianglePath, color = Color(0xFFFF1744))
                             }
                         } else {
-                            drawCircle(color = Color.White, radius = 2.dp.toPx(), center = Offset(x, y))
-                        }
+                            drawCircle(color = if (isDarkMode) Color.White else Color.DarkGray, radius = 2.dp.toPx(), center = Offset(x, y))                        }
                     }
 
                     val lastY = (1f - ((currentValue - minVal + (paddedRange * 0.1)) / paddedRange).toFloat()) * size.height
@@ -525,7 +541,7 @@ fun DetailedChartPanel(
             }
 
             AnimatedVisibility(visible = showLegend) {
-                Column(modifier = Modifier.fillMaxWidth().background(Color(0xFF1E1E28), RoundedCornerShape(8.dp)).padding(12.dp)) {
+                Column(modifier = Modifier.fillMaxWidth().background(legendBgColor, RoundedCornerShape(8.dp)).padding(12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(modifier = Modifier.size(10.dp).background(Color(0xFF00E676)))
                         Spacer(modifier = Modifier.width(8.dp))
@@ -546,10 +562,16 @@ fun DetailedChartPanel(
 }
 
 @Composable
-fun CountryStatCard(rank: Int, country: CountryData, value: Double, diff: Double, isUp: Boolean, isSelected: Boolean, onClick: () -> Unit) {
+fun CountryStatCard(rank: Int, country: CountryData, value: Double, diff: Double, isUp: Boolean, isSelected: Boolean, isDarkMode: Boolean, onClick: () -> Unit) {
     val changeColor = if (isUp) Color(0xFF00E676) else Color(0xFFFF1744)
-    val bgColor = if (isSelected) Color(0xFF2962FF).copy(alpha = 0.15f) else Color(0xFF161622)
-    val borderColor = if (isSelected) Color(0xFF2962FF) else Color(0xFF2A2A35)
+
+    // Tự động nhận nền Sáng/Tối
+    val defaultBg = if (isDarkMode) Color(0xFF161622) else Color.White
+    val defaultBorder = if (isDarkMode) Color(0xFF2A2A35) else Color(0xFFE5E7EB)
+    val textColor = if (isDarkMode) Color.White else Color.Black
+
+    val bgColor = if (isSelected) Color(0xFF2962FF).copy(alpha = 0.15f) else defaultBg
+    val borderColor = if (isSelected) Color(0xFF2962FF) else defaultBorder
 
     Row(
         modifier = Modifier.fillMaxWidth().clickable { onClick() }.background(bgColor, RoundedCornerShape(12.dp)).border(1.dp, borderColor, RoundedCornerShape(12.dp)).padding(16.dp),
@@ -561,11 +583,11 @@ fun CountryStatCard(rank: Int, country: CountryData, value: Double, diff: Double
             Spacer(modifier = Modifier.width(4.dp))
             Text(text = getFlagEmoji(country.id), fontSize = 20.sp)
             Spacer(modifier = Modifier.width(8.dp))
-            Text(text = country.name, color = if (isSelected) Color.White else Color.LightGray, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(text = country.name, color = if (isSelected) textColor else Color.LightGray, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
 
         Column(horizontalAlignment = Alignment.End) {
-            Text(text = String.format("%.1f", value), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(text = String.format("%.1f", value), color = textColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             if (diff > 0.0) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(imageVector = if (isUp) Icons.Rounded.TrendingUp else Icons.Rounded.TrendingDown, contentDescription = null, tint = changeColor, modifier = Modifier.size(12.dp))
