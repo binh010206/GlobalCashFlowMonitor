@@ -1,4 +1,4 @@
-require('dotenv').config(); // Đọc file môi trường .env
+require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const http = require('http');
@@ -7,93 +7,147 @@ const cors = require('cors');
 
 const app = express();
 app.use(cors());
-app.use(express.json()); // Cho phép Express đọc dữ liệu JSON gửi lên
+app.use(express.json());
 
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
 // =========================================
-// 1. KẾT NỐI MONGODB ATLAS
+// 1. KẾT NỐI MONGODB (FREE TIER BẤT TỬ)
 // =========================================
-// (Giữ nguyên chuỗi kết nối chuẩn của mày)
 const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://globalcashflowmonitor:global123%40@cluster0.xjhpeid.mongodb.net/globalcashflow?retryWrites=true&w=majority&appName=Cluster0";
 
 mongoose.connect(MONGO_URI)
   .then(() => {
       console.log("🔥 Kết nối MongoDB thành công!");
-      seedRealData(); // Tự động nạp tọa độ 40 nước nếu DB trống
+      seedRealData(); 
   })
   .catch(err => console.log("❌ Lỗi MongoDB:", err));
 
 // =========================================
-// 2. ĐỊNH NGHĨA CÁC SCHEMA (DATABASE)
+// 2. CẤU TRÚC DATABASE (SCHEMAS)
 // =========================================
-const countrySchema = new mongoose.Schema({ id: String, name: String, lat: Number, lng: Number });
+const countrySchema = new mongoose.Schema({ 
+    id: String, name: String, lat: Number, lng: Number,
+    gdp: Number, fdi: Number, tradeBalance: Number, reserves: Number, debt: Number 
+});
 const Country = mongoose.model('Country', countrySchema);
 
-// Mảng Flow Schema này để con AI đọc (File chatRoute.js)
 const flowSchema = new mongoose.Schema({ sourceId: String, targetId: String, amount: Number, type: String });
 const Flow = mongoose.model('Flow', flowSchema);
 
-// =========================================
-// 3. ĐĂNG KÝ ROUTER API (CHO CON AI)
-// =========================================
-// Nhúng file chatRoute.js lúc nãy anh em mình code để xử lý AI
-app.use('/api/chat', require('./routes/chatRoute'));
+// 🌟 BẢNG 1: LƯU CẢNH BÁO CÁ MẬP 
+const alertSchema = new mongoose.Schema({ 
+    message: String, 
+    amount: Number, 
+    type: String, 
+    timestamp: { type: Date, default: Date.now } 
+});
+const Alert = mongoose.model('Alert', alertSchema);
+
+// 🌟 BẢNG 2: LƯU LỊCH SỬ CHAT AI 
+const chatHistorySchema = new mongoose.Schema({
+    sessionId: String,     
+    userMessage: String,   
+    aiResponse: String,    
+    timestamp: { type: Date, default: Date.now }
+});
+const ChatHistory = mongoose.model('ChatHistory', chatHistorySchema);
+
 
 // =========================================
-// 4. ĐỘNG CƠ REALTIME SOCKET.IO (CHO MAPBOX)
+// 3. ĐĂNG KÝ API RESTFUL
+// =========================================
+app.use('/api/chat', require('./routes/chatRoute'));
+
+// API: Kéo 10 Cảnh báo mới nhất (Cho nút Alerts trên Android)
+app.get('/api/alerts', async (req, res) => {
+    try {
+        const alerts = await Alert.find().sort({ timestamp: -1 }).limit(10);
+        res.status(200).json({ success: true, data: alerts });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Lỗi kéo Data" });
+    }
+});
+
+
+// =========================================
+// 4. ĐỘNG CƠ SOCKET.IO REALTIME (CHILL MODE - 6 GIÂY)
 // =========================================
 io.on('connection', (socket) => {
-    console.log("⚡ Radar Android vừa kết nối: " + socket.id);
+    console.log("⚡ Radar kết nối: " + socket.id);
     
-    // Động cơ mô phỏng luân chuyển dòng tiền toàn cầu (Weighted Simulation Engine)
     const dataPump = setInterval(async () => {
         try {
             const countries = await Country.find();
             if (countries.length < 2) return;
 
-            // Trọng số kinh tế: Các cường quốc này sẽ tạo ra / nhận nhiều dòng tiền hơn
             const heavyWeights = ["US", "CN", "DE", "JP", "GB", "FR", "IN"];
             const flowTypes = ["FDI", "TRADE", "REMITTANCE"];
             
             const flowsToEmit = [];
-            const numFlows = Math.floor(Math.random() * 3) + 3; // Tạo 3 đến 5 luồng cùng lúc
+            const numFlows = Math.floor(Math.random() * 2) + 2; 
 
             for (let i = 0; i < numFlows; i++) {
-                // Rút ngẫu nhiên 2 quốc gia để kết nối
                 let source = countries[Math.floor(Math.random() * countries.length)];
                 let target = countries[Math.floor(Math.random() * countries.length)];
                 while (source.id === target.id) {
                     target = countries[Math.floor(Math.random() * countries.length)];
                 }
 
-                // Tính toán số tiền dựa trên quy mô kinh tế
-                let baseAmount = Math.random() * 5 + 0.5; // Mặc định từ 0.5 - 5.5 tỷ USD
-                
+                let baseAmount = Math.random() * 5 + 0.5; 
                 if (heavyWeights.includes(source.id)) baseAmount *= 4.5; 
                 if (heavyWeights.includes(target.id)) baseAmount *= 2.5;
-                if (source.id === "VN" || target.id === "VN") baseAmount *= 2; // Ưu tiên VN hiển thị sáng hơn
+                if (source.id === "VN" || target.id === "VN") baseAmount *= 2; 
+
+                const finalAmount = parseFloat(baseAmount.toFixed(2));
+                const flowType = flowTypes[Math.floor(Math.random() * flowTypes.length)];
+
+                // 🌟 LƯU DB NẾU LÀ CÁ MẬP (> 15 TỶ USD)
+                if (finalAmount >= 15) {
+                    const msg = `CÁ MẬP: Dòng vốn ${finalAmount} tỷ USD (${flowType}) vừa di chuyển từ ${source.id} sang ${target.id}.`;
+                    await Alert.create({ message: msg, amount: finalAmount, type: "SHARK" });
+
+                    const totalAlerts = await Alert.countDocuments();
+                    if (totalAlerts > 50) {
+                        await Alert.findOneAndDelete({}, { sort: { timestamp: 1 } });
+                    }
+                }
 
                 flowsToEmit.push({
                     id: `flow_${Date.now()}_${i}`,
                     sourceId: source.id,
                     targetId: target.id,
-                    amount: parseFloat(baseAmount.toFixed(2)),
-                    type: flowTypes[Math.floor(Math.random() * flowTypes.length)]
+                    amount: finalAmount,
+                    type: flowType
                 });
             }
 
-            // Gửi dữ liệu xuống cho điện thoại vẽ đồ họa
+            // 🌟 ĐÃ BỔ SUNG: Bơm độ nhiễu thị trường (Market Noise 0.05%) để vẽ biểu đồ Thống kê mượt mà
+            const countriesWithStats = countries.map(c => {
+                let obj = c.toObject();
+                // Công thức tạo nhiễu ngẫu nhiên siêu nhỏ
+                const fluctuation = () => 1 + (Math.random() * 0.001 - 0.0005); 
+                
+                // Nếu lỡ data DB bị thiếu, fallback về 100 để tránh crash
+                obj.gdp = parseFloat(((obj.gdp || 100) * fluctuation()).toFixed(2));
+                obj.fdi = parseFloat(((obj.fdi || 10) * fluctuation()).toFixed(2));
+                obj.tradeBalance = parseFloat(((obj.tradeBalance || 5) * fluctuation()).toFixed(2));
+                obj.reserves = parseFloat(((obj.reserves || 20) * fluctuation()).toFixed(2));
+                obj.debt = parseFloat(((obj.debt || 50) * fluctuation()).toFixed(2));
+                return obj;
+            });
+
+            // Gửi dữ liệu xuống Android (Bao gồm Data Thống kê + Data Bắn Map)
             socket.emit("cashflow_update", {
-                countries: countries,
+                countries: countriesWithStats,
                 flows: flowsToEmit
             });
 
         } catch (error) { 
-            console.error("Lỗi động cơ Socket:", error); 
+            console.error("Lỗi Socket:", error); 
         }
-    }, 2500); // 2.5 giây làm mới một lần
+    }, 6000); 
 
     socket.on('disconnect', () => {
         clearInterval(dataPump);
@@ -102,67 +156,69 @@ io.on('connection', (socket) => {
 });
 
 // =========================================
-// 5. HÀM NẠP TỌA ĐỘ VĨ MÔ 40 QUỐC GIA (KHÔNG CHẾ DATA)
+// 5. NẠP TỌA ĐỘ VÀ SỐ LIỆU VĨ MÔ (ĐÃ BỔ SUNG ĐẦY ĐỦ 40 NƯỚC CỦA MÀY + CHỈ SỐ)
 // =========================================
 async function seedRealData() {
+    // Ép xóa Data cũ nếu phát hiện Data đó chưa có các trường GDP (để nạp lại bản chuẩn)
     const count = await Country.countDocuments();
-    if (count === 0) {
-        console.log("Đang nạp dữ liệu tọa độ địa lý 40 quốc gia trọng điểm...");
+    if (count > 0 && !(await Country.findOne({ id: "VN" })).gdp) {
+        console.log("Phát hiện Data cũ thiếu chỉ số kinh tế. Đang xóa để nạp lại...");
+        await Country.deleteMany({});
+    }
+
+    const newCount = await Country.countDocuments();
+    if (newCount === 0) {
+        console.log("Đang nạp Map 40 quốc gia kèm Data Vĩ mô...");
         const topCountries = [
-            // Đông Nam Á & Châu Á
-            { id: "VN", name: "Việt Nam", lat: 14.0583, lng: 108.2772 },
-            { id: "SG", name: "Singapore", lat: 1.3521, lng: 103.8198 },
-            { id: "TH", name: "Thái Lan", lat: 15.8700, lng: 100.9925 },
-            { id: "ID", name: "Indonesia", lat: -0.7893, lng: 113.9213 },
-            { id: "MY", name: "Malaysia", lat: 4.2105, lng: 101.9758 },
-            { id: "PH", name: "Philippines", lat: 12.8797, lng: 121.7740 },
-            { id: "CN", name: "Trung Quốc", lat: 35.8617, lng: 104.1954 },
-            { id: "JP", name: "Nhật Bản", lat: 36.2048, lng: 138.2529 },
-            { id: "KR", name: "Hàn Quốc", lat: 35.9078, lng: 127.7669 },
-            { id: "IN", name: "Ấn Độ", lat: 20.5937, lng: 78.9629 },
-            { id: "AE", name: "UAE", lat: 23.4241, lng: 53.8478 },
-            { id: "SA", name: "Ả Rập Xê Út", lat: 23.8859, lng: 45.0792 },
-            { id: "IL", name: "Israel", lat: 31.0461, lng: 34.8516 },
-            { id: "TR", name: "Thổ Nhĩ Kỳ", lat: 38.9637, lng: 35.2433 },
-            // Châu Âu
-            { id: "GB", name: "Vương quốc Anh", lat: 55.3781, lng: -3.4360 },
-            { id: "DE", name: "Đức", lat: 51.1657, lng: 10.4515 },
-            { id: "FR", name: "Pháp", lat: 46.2276, lng: 2.2137 },
-            { id: "IT", name: "Ý", lat: 41.8719, lng: 12.5674 },
-            { id: "NL", name: "Hà Lan", lat: 52.1326, lng: 5.2913 },
-            { id: "CH", name: "Thụy Sĩ", lat: 46.8182, lng: 8.2275 },
-            { id: "ES", name: "Tây Ban Nha", lat: 40.4637, lng: -3.7492 },
-            { id: "SE", name: "Thụy Điển", lat: 60.1282, lng: 18.6435 },
-            { id: "NO", name: "Na Uy", lat: 60.4720, lng: 8.4689 },
-            { id: "FI", name: "Phần Lan", lat: 61.9241, lng: 25.7482 },
-            { id: "DK", name: "Đan Mạch", lat: 56.2639, lng: 9.5018 },
-            { id: "IE", name: "Ireland", lat: 53.1424, lng: -7.6921 },
-            // Châu Mỹ
-            { id: "US", name: "Hoa Kỳ", lat: 37.0902, lng: -95.7129 },
-            { id: "CA", name: "Canada", lat: 56.1304, lng: -106.3468 },
-            { id: "MX", name: "Mexico", lat: 23.6345, lng: -102.5528 },
-            { id: "BR", name: "Brazil", lat: -14.2350, lng: -51.9253 },
-            { id: "AR", name: "Argentina", lat: -38.4161, lng: -63.6167 },
-            { id: "CL", name: "Chile", lat: -35.6751, lng: -71.5430 },
-            { id: "CO", name: "Colombia", lat: 4.5709, lng: -74.2973 },
-            { id: "PE", name: "Peru", lat: -9.1900, lng: -75.0152 },
-            // Châu Phi & Châu Đại Dương & Nga
-            { id: "AU", name: "Úc", lat: -25.2744, lng: 133.7751 },
-            { id: "NZ", name: "New Zealand", lat: -40.9006, lng: 174.8860 },
-            { id: "ZA", name: "Nam Phi", lat: -30.5595, lng: 22.9375 },
-            { id: "EG", name: "Ai Cập", lat: 26.8206, lng: 30.8025 },
-            { id: "NG", name: "Nigeria", lat: 9.0820, lng: 8.6753 },
-            { id: "RU", name: "Nga", lat: 61.5240, lng: 105.3188 }
+            // Top Các nước dẫn đầu (Dữ liệu thật IMF/World Bank - Tỷ USD)
+            { id: "US", name: "Hoa Kỳ", lat: 37.0902, lng: -95.7129, gdp: 27360, fdi: 388, tradeBalance: -1060, reserves: 242, debt: 34000 },
+            { id: "CN", name: "Trung Quốc", lat: 35.8617, lng: 104.1954, gdp: 17700, fdi: 163, tradeBalance: 823, reserves: 3225, debt: 14000 },
+            { id: "VN", name: "Việt Nam", lat: 14.0583, lng: 108.2772, gdp: 430, fdi: 36.6, tradeBalance: 28, reserves: 88, debt: 135 },
+            { id: "JP", name: "Nhật Bản", lat: 36.2048, lng: 138.2529, gdp: 4212, fdi: 32, tradeBalance: -60, reserves: 1290, debt: 10400 },
+            { id: "DE", name: "Đức", lat: 51.1657, lng: 10.4515, gdp: 4456, fdi: 40, tradeBalance: 250, reserves: 310, debt: 3200 },
+            { id: "IN", name: "Ấn Độ", lat: 20.5937, lng: 78.9629, gdp: 3730, fdi: 49, tradeBalance: -250, reserves: 600, debt: 2100 },
+            { id: "SG", name: "Singapore", lat: 1.3521, lng: 103.8198, gdp: 501, fdi: 141, tradeBalance: 154, reserves: 345, debt: 650 },
+            { id: "GB", name: "Vương quốc Anh", lat: 55.3781, lng: -3.4360, gdp: 3332, fdi: 14, tradeBalance: -210, reserves: 180, debt: 3100 },
+            { id: "FR", name: "Pháp", lat: 46.2276, lng: 2.2137, gdp: 3050, fdi: 34, tradeBalance: -100, reserves: 240, debt: 3300 },
+            { id: "KR", name: "Hàn Quốc", lat: 35.9078, lng: 127.7669, gdp: 1712, fdi: 18, tradeBalance: 15, reserves: 415, debt: 950 },
+            { id: "BR", name: "Brazil", lat: -14.2350, lng: -51.9253, gdp: 2120, fdi: 65, tradeBalance: 98, reserves: 350, debt: 1600 },
+            { id: "TH", name: "Thái Lan", lat: 15.8700, lng: 100.9925, gdp: 514, fdi: 10, tradeBalance: 12, reserves: 220, debt: 310 },
+            { id: "ID", name: "Indonesia", lat: -0.7893, lng: 113.9213, gdp: 1370, fdi: 22, tradeBalance: 36, reserves: 145, debt: 520 },
+            { id: "MY", name: "Malaysia", lat: 4.2105, lng: 101.9758, gdp: 430, fdi: 17, tradeBalance: 45, reserves: 115, debt: 250 },
+            { id: "AU", name: "Úc", lat: -25.2744, lng: 133.7751, gdp: 1680, fdi: 61, tradeBalance: 70, reserves: 55, debt: 900 },
+            // Các nước còn lại (Dữ liệu Baseline để không bị Crash app)
+            { id: "PH", name: "Philippines", lat: 12.8797, lng: 121.7740, gdp: 436, fdi: 9, tradeBalance: -15, reserves: 98, debt: 115 },
+            { id: "AE", name: "UAE", lat: 23.4241, lng: 53.8478, gdp: 509, fdi: 22, tradeBalance: 80, reserves: 115, debt: 150 },
+            { id: "SA", name: "Ả Rập Xê Út", lat: 23.8859, lng: 45.0792, gdp: 1060, fdi: 12, tradeBalance: 120, reserves: 450, debt: 250 },
+            { id: "IL", name: "Israel", lat: 31.0461, lng: 34.8516, gdp: 522, fdi: 21, tradeBalance: -5, reserves: 200, debt: 145 },
+            { id: "TR", name: "Thổ Nhĩ Kỳ", lat: 38.9637, lng: 35.2433, gdp: 1150, fdi: 13, tradeBalance: -45, reserves: 85, debt: 450 },
+            { id: "IT", name: "Ý", lat: 41.8719, lng: 12.5674, gdp: 2250, fdi: 19, tradeBalance: 30, reserves: 170, debt: 2800 },
+            { id: "NL", name: "Hà Lan", lat: 52.1326, lng: 5.2913, gdp: 1110, fdi: 45, tradeBalance: 75, reserves: 40, debt: 520 },
+            { id: "CH", name: "Thụy Sĩ", lat: 46.8182, lng: 8.2275, gdp: 880, fdi: -15, tradeBalance: 40, reserves: 920, debt: 210 },
+            { id: "ES", name: "Tây Ban Nha", lat: 40.4637, lng: -3.7492, gdp: 1580, fdi: 35, tradeBalance: 10, reserves: 85, debt: 1600 },
+            { id: "SE", name: "Thụy Điển", lat: 60.1282, lng: 18.6435, gdp: 590, fdi: 24, tradeBalance: 15, reserves: 55, debt: 210 },
+            { id: "NO", name: "Na Uy", lat: 60.4720, lng: 8.4689, gdp: 485, fdi: 11, tradeBalance: 105, reserves: 85, debt: 150 },
+            { id: "FI", name: "Phần Lan", lat: 61.9241, lng: 25.7482, gdp: 300, fdi: 8, tradeBalance: 2, reserves: 45, debt: 180 },
+            { id: "DK", name: "Đan Mạch", lat: 56.2639, lng: 9.5018, gdp: 410, fdi: 10, tradeBalance: 35, reserves: 70, debt: 120 },
+            { id: "IE", name: "Ireland", lat: 53.1424, lng: -7.6921, gdp: 545, fdi: 85, tradeBalance: 80, reserves: 12, debt: 250 },
+            { id: "CA", name: "Canada", lat: 56.1304, lng: -106.3468, gdp: 2140, fdi: 54, tradeBalance: 15, reserves: 110, debt: 2200 },
+            { id: "MX", name: "Mexico", lat: 23.6345, lng: -102.5528, gdp: 1780, fdi: 35, tradeBalance: -25, reserves: 205, debt: 850 },
+            { id: "AR", name: "Argentina", lat: -38.4161, lng: -63.6167, gdp: 630, fdi: 6, tradeBalance: 15, reserves: 25, debt: 380 },
+            { id: "CL", name: "Chile", lat: -35.6751, lng: -71.5430, gdp: 335, fdi: 12, tradeBalance: 8, reserves: 40, debt: 125 },
+            { id: "CO", name: "Colombia", lat: 4.5709, lng: -74.2973, gdp: 363, fdi: 17, tradeBalance: -10, reserves: 55, debt: 180 },
+            { id: "PE", name: "Peru", lat: -9.1900, lng: -75.0152, gdp: 264, fdi: 8, tradeBalance: 12, reserves: 75, debt: 95 },
+            { id: "NZ", name: "New Zealand", lat: -40.9006, lng: 174.8860, gdp: 250, fdi: 4, tradeBalance: -5, reserves: 15, debt: 120 },
+            { id: "ZA", name: "Nam Phi", lat: -30.5595, lng: 22.9375, gdp: 377, fdi: 5, tradeBalance: 5, reserves: 60, debt: 260 },
+            { id: "EG", name: "Ai Cập", lat: 26.8206, lng: 30.8025, gdp: 398, fdi: 9, tradeBalance: -30, reserves: 35, debt: 160 },
+            { id: "NG", name: "Nigeria", lat: 9.0820, lng: 8.6753, gdp: 390, fdi: 2, tradeBalance: 5, reserves: 35, debt: 120 },
+            { id: "RU", name: "Nga", lat: 61.5240, lng: 105.3188, gdp: 1997, fdi: -15, tradeBalance: 120, reserves: 590, debt: 350 }
         ];
         await Country.insertMany(topCountries);
-        console.log("✅ Đã nạp xong bản đồ 40 quốc gia!");
+        console.log("✅ Đã nạp xong bản đồ 40 quốc gia + Dữ liệu thống kê!");
     }
 }
 
-// =========================================
-// 6. KHỞI ĐỘNG SERVER
-// =========================================
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-    console.log(`🚀 Hệ thống Backend Global Cash Flow đang chạy tại port ${PORT}`);
+    console.log(`🚀 Backend Global Cash Flow đang chạy tại port ${PORT}`);
 });
