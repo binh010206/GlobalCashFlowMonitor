@@ -70,6 +70,8 @@ data class SocketPayload(val countries: List<CountryData>, val flows: List<FlowD
 fun MapScreen(
     isLoggedIn: Boolean = false,
     isDarkMode: Boolean = true,
+    targetCountryId: String? = null,
+    onZoomCompleted: () -> Unit = {},
     onNavigateToLogin: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -117,6 +119,37 @@ fun MapScreen(
                 )
             }
             pointAnnotationManager?.create(options)
+        }
+    }
+
+    // Khối lệnh này sẽ kích hoạt camera bay (flyTo) khi nhận được targetCountryId từ phòng Chat
+    LaunchedEffect(targetCountryId, isMapStyleLoaded, realTimeData) {
+        if (targetCountryId != null && isMapStyleLoaded && realTimeData.isNotEmpty()) {
+            val targetCountry = realTimeData.find { it.id == targetCountryId.uppercase() }
+            if (targetCountry != null) {
+                // Hiển thị thông báo
+                Toast.makeText(context, "Đã định vị: ${targetCountry.name}", Toast.LENGTH_SHORT).show()
+
+                // Gọi Mapbox bay đến tọa độ đó
+                mapboxMapRef?.flyTo(
+                    com.mapbox.maps.CameraOptions.Builder()
+                        .center(com.mapbox.geojson.Point.fromLngLat(targetCountry.lng, targetCountry.lat))
+                        .zoom(4.5)
+                        .pitch(45.0)
+                        .bearing(0.0)
+                        .build(),
+                    com.mapbox.maps.plugin.animation.MapAnimationOptions.mapAnimationOptions {
+                        duration(2500) // Thời gian bay là 2.5 giây
+                    }
+                )
+
+                // Tùy chọn:Bật luôn popup hiển thị thông tin hoặc mở AI Chatbot ở đây
+                // showAiBot = true
+                // chatInput = "Phân tích số liệu của ${targetCountry.name}"
+
+                // Reset lại biến để không bị bay lại vào lần sau
+                onZoomCompleted()
+            }
         }
     }
 

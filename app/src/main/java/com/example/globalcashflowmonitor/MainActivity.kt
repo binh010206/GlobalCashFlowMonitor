@@ -67,6 +67,11 @@ fun MainAppFlow() {
     // 0=Map, 1=AI, 2=Stats(Center), 3=Chat, 4=Settings
     var currentScreen by remember { mutableStateOf(0) }
 
+    var currentChatRoomId by remember { mutableStateOf<String?>(null) }
+    var currentChatRoomName by remember { mutableStateOf("") }
+
+    var targetCountryIdToZoom by remember { mutableStateOf<String?>(null) }
+
     // HÀM BẢO VỆ CHUYỂN TAB (FREE vs PREMIUM)
     fun navigateToTab(tabIndex: Int) {
         val premiumTabs = listOf(1, 3, 4) // AI, Chat, Settings bắt buộc Đăng nhập
@@ -98,6 +103,8 @@ fun MainAppFlow() {
                         0 -> MapScreen(
                             isLoggedIn = isLoggedIn,
                             isDarkMode = isDarkMode,
+                            targetCountryId = targetCountryIdToZoom,
+                            onZoomCompleted = { targetCountryIdToZoom = null },
                             onNavigateToLogin = { authScreenType = "LOGIN"; showAuthScreen = true }
                         )
 
@@ -109,7 +116,32 @@ fun MainAppFlow() {
 
                         // TAB PREMIUM: Đã khóa bằng hàm navigateToTab ở trên
                         1 -> PlaceholderScreen("Màn hình AI Assist (Đang ráp)")
-                        3 -> PlaceholderScreen("Phòng Chat Vĩ Mô (Đang ráp)")
+                        3 -> {
+                            if (currentChatRoomId == null) {
+                                // Nếu chưa vào phòng nào -> Hiện danh sách sảnh chính
+                                ChatListScreen(
+                                    isDarkMode = isDarkMode,
+                                    onNavigateToRoom = { roomId, roomName ->
+                                        currentChatRoomId = roomId
+                                        currentChatRoomName = roomName // LƯU LẠI TÊN PHÒNG KHI CLICK
+                                    }
+                                )
+                            } else {
+                                // Nếu đã chọn phòng -> Mở màn hình chat riêng biệt
+                                ChatScreen(
+                                    roomId = currentChatRoomId!!,
+                                    roomName = currentChatRoomName,
+                                    isDarkMode = isDarkMode,
+                                    onBackClick = {
+                                        currentChatRoomId = null // Xóa ID phòng để quay lại danh sách
+                                    },
+                                    onNavigateToMap = { countryId ->
+                                        targetCountryIdToZoom = countryId
+                                        currentScreen = 0
+                                    }
+                                )
+                            }
+                        }
                         4 -> SettingsScreen(
                             onLogout = {
                                 isLoggedIn = false
