@@ -31,7 +31,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
-import androidx.core.content.ContextCompat
 import com.google.gson.Gson
 import io.socket.client.IO
 import io.socket.client.Socket
@@ -52,6 +51,7 @@ import com.mapbox.maps.extension.style.layers.generated.symbolLayer
 import com.mapbox.maps.extension.style.sources.addSource
 import com.mapbox.maps.extension.style.sources.generated.geoJsonSource
 import com.mapbox.maps.extension.style.sources.getSourceAs
+import com.mapbox.maps.plugin.animation.flyTo
 import com.mapbox.maps.plugin.annotation.annotations
 import com.mapbox.maps.plugin.annotation.generated.PointAnnotationManager
 import com.mapbox.maps.plugin.annotation.generated.PointAnnotationOptions
@@ -61,7 +61,7 @@ import com.mapbox.maps.plugin.compass.compass
 import com.mapbox.maps.plugin.attribution.attribution
 import com.mapbox.maps.plugin.logo.logo
 
-data class CountryData(val id: String, val name: String, val lat: Double, val lng: Double, val flagUrl: String)
+data class CountryData(val id: String, val name: String, val lat: Double, val lng: Double, val flagUrl: String? = null)
 data class FlowData(val id: String, val sourceId: String, val targetId: String, val amount: Double, val type: String)
 data class SocketPayload(val countries: List<CountryData>, val flows: List<FlowData>)
 
@@ -78,6 +78,12 @@ fun MapScreen(
 
     var pointAnnotationManager by remember { mutableStateOf<PointAnnotationManager?>(null) }
     var isMapStyleLoaded by remember { mutableStateOf(false) }
+    var mapboxMapRef by remember { mutableStateOf<com.mapbox.maps.MapboxMap?>(null) }
+
+    // 🌟 BIẾN TRẠNG THÁI CHO CHATBOT (Lúc nãy mày lỡ tay xóa mất khúc này)
+    var showAiBot by remember { mutableStateOf(false) }
+    var chatInput by remember { mutableStateOf("") }
+    var aiResponse by remember { mutableStateOf("Xin chào! Tôi là Trợ lý Vĩ mô Gemini. Hãy ra lệnh cho tôi phân tích hoặc di chuyển bản đồ đến quốc gia bạn muốn.") }
 
     LaunchedEffect(Unit) {
         try {
@@ -124,6 +130,8 @@ fun MapScreen(
                     attribution.updateSettings { enabled = false }
 
                     val mapboxMap = getMapboxMap()
+                    mapboxMapRef = mapboxMap
+
                     pointAnnotationManager = annotations.createPointAnnotationManager()
 
                     mapboxMap.loadStyleUri(Style.DARK) { style ->
@@ -138,24 +146,13 @@ fun MapScreen(
                             .pitch(45.0)
                             .build()
                     )
-
-                    mapboxMap.addOnCameraChangeListener {
-                        val currentZoom = mapboxMap.cameraState.zoom
-                        val dynamicSize = (currentZoom / 10.0).coerceIn(0.12, 0.5)
-                        pointAnnotationManager?.let { manager ->
-                            manager.annotations.forEach { it.iconSize = dynamicSize }
-                            manager.update(manager.annotations)
-                        }
-                    }
                 }
             },
             update = { mapView -> updateFlowDataOnMap(mapView, activeFlows, realTimeData) },
             modifier = Modifier.fillMaxSize().zIndex(0f)
         )
 
-        // ==========================================
-        // KHU VỰC TOP: CHỈ HIỂN THỊ TỐI ĐA 2 THÔNG BÁO KHÔNG BỊ CẮT CHỮ
-        // ==========================================
+        // KHU VỰC TOP
         Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -169,69 +166,166 @@ fun MapScreen(
 
             if (activeFlows.isNotEmpty()) {
                 Text("LIVE FLOWS (TỶ USD)", color = Color(0xFF00E676), fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, bottom = 6.dp))
-
-                // Chiều cao khống chế chuẩn 145.dp để vừa khít 2 cái
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.heightIn(max = 145.dp)
                 ) {
-                    // Sử dụng .take(2) để ép hệ thống chỉ lấy tối đa 2 luồng tiền mới nhất
                     items(activeFlows.take(2), key = { it.id }) { flow -> MiniLiveFlowCard(flow) }
                 }
             }
         }
 
-        // ==========================================
-        // KHU VỰC RIGHT: NÂNG CAO LÊN ĐỂ KHÔNG CHẠM THANH DƯỚI
-        // ==========================================
+        // KHU VỰC RIGHT (ĐÃ GẮN SỰ KIỆN MỞ CHATBOT)
         Column(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .padding(end = 16.dp)
-                .offset(y = (10).dp) // Nhích nhẹ lên 30dp cực kỳ thoáng đãng
+                .offset(y = (10).dp)
                 .zIndex(2f),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             FeatureButton(Icons.Rounded.AutoGraph, Color(0xFFFF9100), "3D Heatmap")
-            FeatureButton(Icons.Rounded.SmartToy, Color(0xFF00B0FF), "Gemini AI")
+            // 🌟 SỬA LẠI CHỖ NÀY: Bấm vào mở BottomSheet
+            FeatureButton(Icons.Rounded.SmartToy, Color(0xFF00B0FF), "Gemini AI", onClick = { showAiBot = true })
             FeatureButton(Icons.Rounded.PeopleAlt, Color(0xFFE040FB), "Sync Room")
             FeatureButton(Icons.Rounded.NotificationsActive, Color(0xFFFFD600), "Alerts")
+        }
+
+        // =========================================
+        // GIAO DIỆN CHATBOT BOTTOM SHEET (Lúc nãy mày xóa mất)
+        // =========================================
+        if (showAiBot) {
+            ModalBottomSheet(
+                onDismissRequest = { showAiBot = false },
+                containerColor = Color(0xFF121224),
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                modifier = Modifier.zIndex(10f)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .navigationBarsPadding()
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.SmartToy, null, tint = Color(0xFF00B0FF), modifier = Modifier.size(28.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Gemini Macro AI Analyst", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    // Hộp thoại AI trả lời
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 120.dp, max = 250.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color(0x1AFFFFFF))
+                            .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(16.dp))
+                            .padding(14.dp)
+                    ) {
+                        Text(aiResponse, color = Color.LightGray, fontSize = 14.sp, modifier = Modifier.align(Alignment.TopStart))
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+
+                    // Ô nhập tin nhắn
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextField(
+                            value = chatInput,
+                            onValueChange = { chatInput = it },
+                            placeholder = { Text("FDI vào Việt Nam thế nào?", color = Color.Gray) },
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color(0x33000000),
+                                unfocusedContainerColor = Color(0x33000000),
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(24.dp))
+                                .border(0.5.dp, Color.Gray.copy(alpha = 0.5f), RoundedCornerShape(24.dp))
+                        )
+
+                        Spacer(Modifier.width(8.dp))
+
+                        // 🌟 ĐÂY LÀ NÚT GỬI CHUẨN GỌI API & BAY CAMERA
+                        IconButton(
+                            onClick = {
+                                if (chatInput.isNotBlank()) {
+                                    val userQuery = chatInput
+                                    aiResponse = "Gemini AI đang phân tích dữ liệu vĩ mô dòng tiền, vui lòng đợi..."
+                                    chatInput = ""
+
+                                    val request = com.example.globalcashflowmonitor.network.ChatRequest(userQuery)
+                                    com.example.globalcashflowmonitor.network.RetrofitClient.instance.sendAiMessage(request)
+                                        .enqueue(object : retrofit2.Callback<com.example.globalcashflowmonitor.network.ChatResponse> {
+                                            override fun onResponse(
+                                                call: retrofit2.Call<com.example.globalcashflowmonitor.network.ChatResponse>,
+                                                response: retrofit2.Response<com.example.globalcashflowmonitor.network.ChatResponse>
+                                            ) {
+                                                if (response.isSuccessful && response.body()?.success == true) {
+                                                    val aiData = response.body()?.data
+                                                    if (aiData != null) {
+                                                        aiResponse = aiData.reply
+                                                        if (aiData.action == "ZOOM_TO" && aiData.targetId.isNotBlank()) {
+                                                            val targetCountry = realTimeData.find { it.id == aiData.targetId.uppercase() }
+                                                            if (targetCountry != null) {
+                                                                Toast.makeText(context, "AI đang dẫn đường đến: ${targetCountry.name}", Toast.LENGTH_SHORT).show()
+                                                                mapboxMapRef?.flyTo(
+                                                                    com.mapbox.maps.CameraOptions.Builder()
+                                                                        .center(com.mapbox.geojson.Point.fromLngLat(targetCountry.lng, targetCountry.lat))
+                                                                        .zoom(4.5).pitch(45.0).bearing(0.0).build(),
+                                                                    com.mapbox.maps.plugin.animation.MapAnimationOptions.mapAnimationOptions {
+                                                                        duration(2500)
+                                                                    }
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                } else {
+                                                    aiResponse = "Hệ thống AI phản hồi thất bại."
+                                                }
+                                            }
+
+                                            override fun onFailure(call: retrofit2.Call<com.example.globalcashflowmonitor.network.ChatResponse>, t: Throwable) {
+                                                aiResponse = "Lỗi kết nối: ${t.message}"
+                                            }
+                                        })
+                                }
+                            },
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(Color(0xFF00B0FF))
+                        ) {
+                            Icon(Icons.Rounded.Send, null, tint = Color.White)
+                        }
+                    }
+                }
+            }
         }
     }
 }
 
-// ==========================================
-// THUẬT TOÁN ĐỒ HỌA: TẠO MŨI TÊN & CHỮ TRÊN DÂY CUNG
-// ==========================================
 fun setupFlowLayers(style: Style) {
     val flowTypes = listOf(
         Pair("FDI", "#00B0FF"),
         Pair("TRADE", "#FF9100"),
         Pair("REMITTANCE", "#E040FB")
     )
-
     for (type in flowTypes) {
-        style.addSource(geoJsonSource("flow-source-${type.first}") {
-            featureCollection(FeatureCollection.fromFeatures(emptyList()))
-        })
-
-        // Layer 1: Vẽ nét dây cung Neon chìm ở dưới
-        style.addLayer(lineLayer("flow-layer-${type.first}", "flow-source-${type.first}") {
-            lineColor(type.second)
-            lineWidth(2.5)
-            lineOpacity(0.5)
-        })
-
-        // Layer 2: Vẽ Chữ số tiền + Mũi tên hướng đích chạy uốn lượn dọc theo đường cong
+        style.addSource(geoJsonSource("flow-source-${type.first}") { featureCollection(FeatureCollection.fromFeatures(emptyList())) })
+        style.addLayer(lineLayer("flow-layer-${type.first}", "flow-source-${type.first}") { lineColor(type.second); lineWidth(2.5); lineOpacity(0.5) })
         style.addLayer(symbolLayer("flow-text-${type.first}", "flow-source-${type.first}") {
             symbolPlacement(com.mapbox.maps.extension.style.layers.properties.generated.SymbolPlacement.LINE)
             textField(com.mapbox.maps.extension.style.expressions.generated.Expression.get("arcLabel"))
-            textColor(type.second)
-            textSize(11.0)
-            textHaloColor("#0A0A14")
-            textHaloWidth(2.0)
-            textKeepUpright(true) // Chữ không bao giờ bị chổng ngược đầu khi xoay map
-            symbolSpacing(150.0) // Khoảng cách lặp lại của chữ trên dây cung
+            textColor(type.second); textSize(11.0); textHaloColor("#0A0A14"); textHaloWidth(2.0); textKeepUpright(true); symbolSpacing(150.0)
         })
     }
 }
@@ -246,28 +340,13 @@ fun updateFlowDataOnMap(mapView: MapView, activeFlows: List<FlowData>, countries
             val sourceCountry = countries.find { it.id == flow.sourceId }
             val targetCountry = countries.find { it.id == flow.targetId }
             if (sourceCountry != null && targetCountry != null) {
-                // Hướng vẽ luôn đi từ Source -> Target để mũi tên hướng đúng về nước đích
                 val startPoint = Point.fromLngLat(sourceCountry.lng, sourceCountry.lat)
                 val endPoint = Point.fromLngLat(targetCountry.lng, targetCountry.lat)
-
                 val curvedPoints = createArc(startPoint, endPoint)
                 val feature = Feature.fromGeometry(LineString.fromLngLats(curvedPoints))
-
-                // Phân loại Icon vĩ mô tương ứng
-                val macroIcon = when(flow.type) {
-                    "FDI" -> "💼"       // Vốn FDI đầu tư nước ngoài
-                    "REMITTANCE" -> "💸" // Kiều hối dòng vốn
-                    else -> "📦"         // Thương mại xuất nhập khẩu (TRADE)
-                }
-
-                // Tạo chuỗi nhãn hiển thị kèm mũi tên hướng đích uốn lượn dọc dây cung: "▶ 💼 +5.2 Tỷ $"
+                val macroIcon = when(flow.type) { "FDI" -> "💼" "REMITTANCE" -> "💸" else -> "📦" }
                 feature.addStringProperty("arcLabel", "▶  $macroIcon +${flow.amount} tỷ")
-
-                when (flow.type) {
-                    "FDI" -> featuresFDI.add(feature)
-                    "REMITTANCE" -> featuresRemit.add(feature)
-                    else -> featuresTrade.add(feature)
-                }
+                when (flow.type) { "FDI" -> featuresFDI.add(feature) "REMITTANCE" -> featuresRemit.add(feature) else -> featuresTrade.add(feature) }
             }
         }
         style.getSourceAs<com.mapbox.maps.extension.style.sources.generated.GeoJsonSource>("flow-source-FDI")?.featureCollection(FeatureCollection.fromFeatures(featuresFDI))
@@ -276,19 +355,14 @@ fun updateFlowDataOnMap(mapView: MapView, activeFlows: List<FlowData>, countries
     }
 }
 
-// ==========================================
-// CÁC HÀM XỬ LÝ ẢNH OFFLINE TRÁNH TRÀN RAM
-// ==========================================
 fun getLocalCircularFlag(context: Context, countryId: String): Bitmap {
     val resourceName = countryId.lowercase()
     val resId = context.resources.getIdentifier(resourceName, "drawable", context.packageName)
     if (resId == 0) return getPlaceholderBitmap()
-
     val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeResource(context.resources, resId, options)
     options.inSampleSize = calculateInSampleSize(options, 100, 100)
     options.inJustDecodeBounds = false
-
     val rawBitmap = BitmapFactory.decodeResource(context.resources, resId, options) ?: return getPlaceholderBitmap()
     return getCircularBitmap(rawBitmap)
 }
@@ -299,9 +373,7 @@ fun calculateInSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeig
     if (height > reqHeight || width > reqWidth) {
         val halfHeight: Int = height / 2
         val halfWidth: Int = width / 2
-        while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
-            inSampleSize *= 2
-        }
+        while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) { inSampleSize *= 2 }
     }
     return inSampleSize
 }
@@ -341,15 +413,16 @@ fun createArc(start: Point, end: Point): List<Point> {
     return arcPoints
 }
 
-// ==========================================
-// COMPONENT UI CON ( giữ nguyên cấu trúc chuẩn )
-// ==========================================
+// 🌟 ĐÃ SỬA LẠI HÀM NÀY ĐỂ NHẬN SỰ KIỆN CLICK MỞ CHATBOT
 @Composable
-fun FeatureButton(icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Color, label: String) {
+fun FeatureButton(icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Color, label: String, onClick: (() -> Unit)? = null) {
     val context = LocalContext.current
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         FloatingActionButton(
-            onClick = { Toast.makeText(context, "Đang mở: $label", Toast.LENGTH_SHORT).show() },
+            onClick = {
+                if (onClick != null) onClick()
+                else Toast.makeText(context, "Đang mở: $label", Toast.LENGTH_SHORT).show()
+            },
             containerColor = Color(0x4D000000),
             contentColor = tint,
             modifier = Modifier.size(48.dp).border(1.dp, tint.copy(alpha = 0.5f), RoundedCornerShape(12.dp)),
@@ -395,14 +468,9 @@ fun MiniLiveFlowCard(flow: FlowData) {
         else -> Color(0xFFFF9100)
     }
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color(0x66000000))
-            .border(0.5.dp, flowColor.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color(0x66000000))
+            .border(0.5.dp, flowColor.copy(alpha = 0.5f), RoundedCornerShape(14.dp)).padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.Public, null, tint = flowColor, modifier = Modifier.size(20.dp))

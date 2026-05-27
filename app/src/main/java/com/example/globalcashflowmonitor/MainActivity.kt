@@ -5,7 +5,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -40,94 +39,168 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             GlobalCashFlowMonitorTheme(darkTheme = true) {
+                MainAppFlow()
+            }
+        }
+    }
+}
 
-                var isLoggedIn by remember { mutableStateOf(false) }
-                var showAuthScreen by remember { mutableStateOf(false) }
-                var authScreen by remember { mutableStateOf("LOGIN") }
-                // 0=Map, 1=AI, 2=Stats(Center), 3=Chat, 4=Settings
-                var currentScreen by remember { mutableStateOf(0) }
+@Composable
+fun MainAppFlow() {
+    // 🌟 TRẠNG THÁI HỆ THỐNG
+    var isLoggedIn by remember { mutableStateOf(false) }
 
-                Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A14))) {
+    // Trạng thái màn hình Auth (Đăng nhập/Đăng ký)
+    var showAuthScreen by remember { mutableStateOf(false) }
+    var authScreenType by remember { mutableStateOf("LOGIN") } // "LOGIN" hoặc "REGISTER"
 
-                    // Lớp màn hình nội dung
-                    Scaffold(modifier = Modifier.zIndex(1f)) { innerPadding ->
-                        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
-                            when (currentScreen) {
-                                0 -> MapScreen(isLoggedIn, onNavigateToLogin = { authScreen = "LOGIN"; showAuthScreen = true })
-                                1 -> Box(modifier = Modifier.fillMaxSize().background(Color.Cyan)) // Placeholder AI
-                                2 -> Box(modifier = Modifier.fillMaxSize().background(Color.Magenta)) // Placeholder Stats
-                                3 -> Box(modifier = Modifier.fillMaxSize().background(Color.Red)) // Placeholder Chat
-                                4 -> SettingsScreen(onLogout = { isLoggedIn = false; currentScreen = 0 })
-                            }
-                        }
+    // 0=Map, 1=AI, 2=Stats(Center), 3=Chat, 4=Settings
+    var currentScreen by remember { mutableStateOf(0) }
+
+    // HÀM BẢO VỆ CHUYỂN TAB (FREE vs PREMIUM)
+    fun navigateToTab(tabIndex: Int) {
+        val premiumTabs = listOf(1, 3, 4) // AI, Chat, Settings bắt buộc Đăng nhập
+        if (tabIndex in premiumTabs && !isLoggedIn) {
+            authScreenType = "LOGIN"
+            showAuthScreen = true
+        } else {
+            currentScreen = tabIndex
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A14))) {
+
+        // ==================================================
+        // 1. LỚP MÀN HÌNH NỘI DUNG (CÁC TAB)
+        // ==================================================
+        Scaffold(
+            modifier = Modifier.zIndex(1f),
+            containerColor = Color.Transparent
+        ) { innerPadding ->
+            Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+                when (currentScreen) {
+                    // TAB FREE: Map và Stats
+                    0 -> MapScreen(
+                        isLoggedIn = isLoggedIn,
+                        onNavigateToLogin = { authScreenType = "LOGIN"; showAuthScreen = true }
+                    )
+                    2 -> StatsScreen(
+                        isLoggedIn = isLoggedIn,
+                        onNavigateToLogin = { authScreenType = "LOGIN"; showAuthScreen = true }
+                    )
+
+                    // TAB PREMIUM: Đã khóa bằng hàm navigateToTab ở trên
+                    1 -> PlaceholderScreen("Màn hình AI Assist (Đang ráp)")
+                    3 -> PlaceholderScreen("Phòng Chat Vĩ Mô (Đang ráp)")
+                    4 -> PlaceholderScreen("Cài đặt & Tài khoản") // Mày thay SettingsScreen của mày vào đây
+                }
+            }
+        }
+
+        // ==================================================
+        // 2. BOTTOM MENU "TÍCH CHỈ" (GIỮ NGUYÊN DESIGN CỦA MÀY)
+        // ==================================================
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 16.dp)
+                .zIndex(3f)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .width(360.dp)
+                    .height(70.dp)
+                    .shadow(12.dp, RoundedCornerShape(35.dp))
+                    .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(35.dp)),
+                color = Color(0xCC101010),
+                shape = RoundedCornerShape(35.dp),
+                tonalElevation = 8.dp
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Cụm Trái
+                    Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.weight(1f)) {
+                        AnimatedNavItem(Icons.Rounded.Public, "Bản đồ", currentScreen == 0) { navigateToTab(0) }
+                        AnimatedNavItem(Icons.Rounded.SmartToy, "AI Assist", currentScreen == 1) { navigateToTab(1) }
                     }
 
-                    // ==================================================
-                    // BOTTOM MENU "TÍCH CHỈ" CLONE (DESIGN BY TAO) - FIX TRIỆT ĐỂ LỖI KẸP CHẢ
-                    // ==================================================
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = 16.dp)
-                            .zIndex(3f)
-                    ) {
-                        // 1. Thanh nền bo tròn kính mờ
-                        Surface(
-                            modifier = Modifier
-                                .width(360.dp)
-                                .height(70.dp)
-                                .shadow(12.dp, RoundedCornerShape(35.dp))
-                                .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(35.dp)),
-                            color = Color(0xCC101010), // Màu tối xịn sò, kính mờ
-                            shape = RoundedCornerShape(35.dp),
-                            tonalElevation = 8.dp
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween, // Đẩy dạt sang 2 bên
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // 2 Nút Trái (Cân đối)
-                                Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.weight(1f)) {
-                                    AnimatedNavItem(Icons.Rounded.Public, "Bản đồ", currentScreen == 0) { currentScreen = 0 }
-                                    AnimatedNavItem(Icons.Rounded.SmartToy, "AI Assist", currentScreen == 1) { currentScreen = 1 }
-                                }
+                    Spacer(modifier = Modifier.width(80.dp)) // Chỗ trống cho FAB
 
-                                // KHOẢNG TRỐNG TO ĐÙNG Ở GIỮA CHO NÚT THỐNG KÊ
-                                Spacer(modifier = Modifier.width(80.dp))
-
-                                // 2 Nút Phải (Cân đối)
-                                Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.weight(1f)) {
-                                    AnimatedNavItem(Icons.Rounded.Forum, "Chat room", currentScreen == 3) { currentScreen = 3 }
-                                    AnimatedNavItem(Icons.Rounded.Settings, "Cài đặt", currentScreen == 4) { currentScreen = 4 }
-                                }
-                            }
-                        }
-
-                        // 3. NÚT FAB THỐNG KÊ TRỒI LÊN (PERFECT CENTER)
-                        FloatingActionButton(
-                            onClick = { currentScreen = 2 },
-                            containerColor = Color(0xFFFFC107), // Vàng Tích Chỉ
-                            contentColor = Color.Black,
-                            shape = CircleShape,
-                            elevation = FloatingActionButtonDefaults.elevation(12.dp),
-                            modifier = Modifier
-                                .size(60.dp)
-                                .align(Alignment.Center)
-                                .offset(y = (-35).dp) // Kéo nó trồi lên một nửa thanh bar
-                                .scale(animateFloatAsState(if (currentScreen == 2) 1.1f else 1.0f).value)
-                        ) {
-                            Icon(Icons.Rounded.Analytics, "Thống kê", modifier = Modifier.size(30.dp))
-                        }
+                    // Cụm Phải
+                    Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.weight(1f)) {
+                        AnimatedNavItem(Icons.Rounded.Forum, "Cộng đồng", currentScreen == 3) { navigateToTab(3) }
+                        AnimatedNavItem(Icons.Rounded.Settings, "Cài đặt", currentScreen == 4) { navigateToTab(4) }
                     }
+                }
+            }
 
-                    // ... (Màn hình trượt Đăng nhập giữ nguyên, tao cắt cho gọn)
+            // NÚT FAB THỐNG KÊ (CENTER)
+            FloatingActionButton(
+                onClick = { navigateToTab(2) },
+                containerColor = Color(0xFFFFC107),
+                contentColor = Color.Black,
+                shape = CircleShape,
+                elevation = FloatingActionButtonDefaults.elevation(12.dp),
+                modifier = Modifier
+                    .size(60.dp)
+                    .align(Alignment.Center)
+                    .offset(y = (-35).dp)
+                    .scale(animateFloatAsState(if (currentScreen == 2) 1.1f else 1.0f).value)
+            ) {
+                Icon(Icons.Rounded.Analytics, "Thống kê", modifier = Modifier.size(30.dp))
+            }
+        }
+
+        // ==================================================
+        // 3. MÀN HÌNH ĐĂNG NHẬP / ĐĂNG KÝ (NỔI LÊN TRÊN CÙNG)
+        // ==================================================
+        if (showAuthScreen) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFF0A0A14)) // Che kín toàn bộ màn hình dưới
+                    .zIndex(10f)
+            ) {
+                if (authScreenType == "LOGIN") {
+                    LoginScreen(
+                        onLoginSuccess = {
+                            isLoggedIn = true
+                            showAuthScreen = false // Đóng auth screen sau khi thành công
+                        },
+                        onNavigateToRegister = { authScreenType = "REGISTER" },
+                        onNavigateToForgot = { /* Xử lý quên mật khẩu sau */ }
+                    )
+                } else {
+                    RegisterScreen(
+                        onRegisterSuccess = {
+                            isLoggedIn = true
+                            showAuthScreen = false
+                        },
+                        onNavigateToLogin = { authScreenType = "LOGIN" }
+                    )
+                }
+
+                // Nút Đóng (Dấu X) góc trên bên phải để quay lại làm "Khách"
+                IconButton(
+                    onClick = { showAuthScreen = false },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .statusBarsPadding()
+                        .padding(16.dp)
+                ) {
+                    Icon(Icons.Rounded.Close, contentDescription = "Đóng", tint = Color.White, modifier = Modifier.size(28.dp))
                 }
             }
         }
     }
 }
 
+// ==================================================
+// COMPONENT: Nút bấm có Animation dưới BottomBar
+// ==================================================
 @Composable
 fun AnimatedNavItem(icon: ImageVector, label: String, isSelected: Boolean, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -144,5 +217,15 @@ fun AnimatedNavItem(icon: ImageVector, label: String, isSelected: Boolean, onCli
         Icon(icon, label, tint = contentColor, modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.height(2.dp))
         Text(text = label, color = contentColor, fontSize = 10.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
+    }
+}
+
+// ==================================================
+// MÀN HÌNH TẠM THỜI (PLACEHOLDER)
+// ==================================================
+@Composable
+fun PlaceholderScreen(title: String) {
+    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A14)), contentAlignment = Alignment.Center) {
+        Text(title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
     }
 }

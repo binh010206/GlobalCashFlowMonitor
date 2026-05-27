@@ -2,18 +2,18 @@ package com.example.globalcashflowmonitor.data
 
 // Khuôn mẫu dữ liệu cho 1 quốc gia
 data class CountryData(
-    val id: String,
-    val name: String,
-    val lat: Double,
-    val lng: Double,
-    val fdi: Double,
-    val tradeBalance: Double,
-    val gdp: Double,
-    val remittances: Double,
-    val fpi: Double,
-    val reserves: Double,
-    val debt: Double,
-    val tourism: Double
+    val id: String = "",
+    val name: String = "",
+    val lat: Double = 0.0,
+    val lng: Double = 0.0,
+    val fdi: Double = 0.0,
+    val tradeBalance: Double = 0.0,
+    val gdp: Double = 0.0,
+    val remittances: Double = 0.0,
+    val fpi: Double = 0.0,
+    val reserves: Double = 0.0,
+    val debt: Double = 0.0,
+    val tourism: Double = 0.0
 )
 
 object MockData {
