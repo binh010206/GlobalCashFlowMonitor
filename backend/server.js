@@ -36,7 +36,6 @@ const Country = mongoose.model('Country', countrySchema);
 const flowSchema = new mongoose.Schema({ sourceId: String, targetId: String, amount: Number, type: String });
 const Flow = mongoose.model('Flow', flowSchema);
 
-// 🌟 BẢNG 1: LƯU CẢNH BÁO CÁ MẬP 
 const alertSchema = new mongoose.Schema({ 
     message: String, 
     amount: Number, 
@@ -45,7 +44,6 @@ const alertSchema = new mongoose.Schema({
 });
 const Alert = mongoose.model('Alert', alertSchema);
 
-// 🌟 BẢNG 2: LƯU LỊCH SỬ CHAT AI 
 const chatHistorySchema = new mongoose.Schema({
     sessionId: String,     
     userMessage: String,   
@@ -54,19 +52,55 @@ const chatHistorySchema = new mongoose.Schema({
 });
 const ChatHistory = mongoose.model('ChatHistory', chatHistorySchema);
 
+// 🌟 ĐÃ THÊM: BẢNG LƯU TÀI KHOẢN NGƯỜI DÙNG (USER)
+const userSchema = new mongoose.Schema({
+    fullName: String,
+    email: { type: String, unique: true },
+    password: String, // Đồ án nên lưu plain-text để dễ test demo
+    pinnedCountry: { type: String, default: "VN" } // Nước ghim mặc định
+});
+const User = mongoose.model('User', userSchema);
+
 
 // =========================================
 // 3. ĐĂNG KÝ API RESTFUL
 // =========================================
 app.use('/api/chat', require('./routes/chatRoute'));
 
-// API: Kéo 10 Cảnh báo mới nhất (Cho nút Alerts trên Android)
+// API: Kéo 10 Cảnh báo mới nhất
 app.get('/api/alerts', async (req, res) => {
     try {
         const alerts = await Alert.find().sort({ timestamp: -1 }).limit(10);
         res.status(200).json({ success: true, data: alerts });
     } catch (error) {
         res.status(500).json({ success: false, message: "Lỗi kéo Data" });
+    }
+});
+
+// 🌟 ĐÃ THÊM: API ĐĂNG KÝ TÀI KHOẢN
+app.post('/api/auth/register', async (req, res) => {
+    try {
+        const { fullName, email, password } = req.body;
+        const existing = await User.findOne({ email });
+        if (existing) return res.status(400).json({ success: false, message: "Email đã tồn tại!" });
+        
+        await User.create({ fullName, email, password });
+        res.status(200).json({ success: true, message: "Đăng ký thành công!" });
+    } catch (error) { 
+        res.status(500).json({ success: false, message: "Lỗi Server" }); 
+    }
+});
+
+// 🌟 ĐÃ THÊM: API ĐĂNG NHẬP TÀI KHOẢN
+app.post('/api/auth/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        const user = await User.findOne({ email, password });
+        if (!user) return res.status(401).json({ success: false, message: "Sai email hoặc mật khẩu!" });
+        
+        res.status(200).json({ success: true, data: { email: user.email, name: user.fullName } });
+    } catch (error) { 
+        res.status(500).json({ success: false, message: "Lỗi Server" }); 
     }
 });
 
@@ -103,7 +137,6 @@ io.on('connection', (socket) => {
                 const finalAmount = parseFloat(baseAmount.toFixed(2));
                 const flowType = flowTypes[Math.floor(Math.random() * flowTypes.length)];
 
-                // 🌟 LƯU DB NẾU LÀ CÁ MẬP (> 15 TỶ USD)
                 if (finalAmount >= 15) {
                     const msg = `CÁ MẬP: Dòng vốn ${finalAmount} tỷ USD (${flowType}) vừa di chuyển từ ${source.id} sang ${target.id}.`;
                     await Alert.create({ message: msg, amount: finalAmount, type: "SHARK" });
@@ -123,13 +156,9 @@ io.on('connection', (socket) => {
                 });
             }
 
-            // 🌟 ĐÃ BỔ SUNG: Bơm độ nhiễu thị trường (Market Noise 0.05%) để vẽ biểu đồ Thống kê mượt mà
             const countriesWithStats = countries.map(c => {
                 let obj = c.toObject();
-                // Công thức tạo nhiễu ngẫu nhiên siêu nhỏ
                 const fluctuation = () => 1 + (Math.random() * 0.001 - 0.0005); 
-                
-                // Nếu lỡ data DB bị thiếu, fallback về 100 để tránh crash
                 obj.gdp = parseFloat(((obj.gdp || 100) * fluctuation()).toFixed(2));
                 obj.fdi = parseFloat(((obj.fdi || 10) * fluctuation()).toFixed(2));
                 obj.tradeBalance = parseFloat(((obj.tradeBalance || 5) * fluctuation()).toFixed(2));
@@ -138,7 +167,6 @@ io.on('connection', (socket) => {
                 return obj;
             });
 
-            // Gửi dữ liệu xuống Android (Bao gồm Data Thống kê + Data Bắn Map)
             socket.emit("cashflow_update", {
                 countries: countriesWithStats,
                 flows: flowsToEmit
@@ -156,7 +184,7 @@ io.on('connection', (socket) => {
 });
 
 // =========================================
-// 5. NẠP TỌA ĐỘ VÀ SỐ LIỆU VĨ MÔ (FORCE CLEAR BẢN CŨ)
+// 5. NẠP TỌA ĐỘ VÀ SỐ LIỆU VĨ MÔ
 // =========================================
 async function seedRealData() {
     try {
@@ -165,20 +193,18 @@ async function seedRealData() {
 
         if (count > 0) {
             const vn = await Country.findOne({ id: "VN" });
-            // Nếu VN không tồn tại, hoặc tồn tại mà KHÔNG có gdp -> Ép xóa
             if (!vn || vn.gdp === undefined || vn.gdp === null) {
                 needsUpdate = true;
             }
         } else {
-            needsUpdate = true; // DB trống rỗng cũng nạp
+            needsUpdate = true;
         }
 
         if (needsUpdate) {
-            console.log("⚠️ Phát hiện Database cũ hoặc trống! Đang Thanos snap xóa sạch để nạp Data mới...");
-            await Country.deleteMany({}); // Xóa sạch sành sanh
+            console.log("⚠️ Phát hiện Database cũ hoặc trống! Đang xóa sạch để nạp Data mới...");
+            await Country.deleteMany({});
             
             const topCountries = [
-                // Top Các nước dẫn đầu
                 { id: "US", name: "Hoa Kỳ", lat: 37.0902, lng: -95.7129, gdp: 27360, fdi: 388, tradeBalance: -1060, reserves: 242, debt: 34000 },
                 { id: "CN", name: "Trung Quốc", lat: 35.8617, lng: 104.1954, gdp: 17700, fdi: 163, tradeBalance: 823, reserves: 3225, debt: 14000 },
                 { id: "VN", name: "Việt Nam", lat: 14.0583, lng: 108.2772, gdp: 430, fdi: 36.6, tradeBalance: 28, reserves: 88, debt: 135 },
@@ -194,7 +220,6 @@ async function seedRealData() {
                 { id: "ID", name: "Indonesia", lat: -0.7893, lng: 113.9213, gdp: 1370, fdi: 22, tradeBalance: 36, reserves: 145, debt: 520 },
                 { id: "MY", name: "Malaysia", lat: 4.2105, lng: 101.9758, gdp: 430, fdi: 17, tradeBalance: 45, reserves: 115, debt: 250 },
                 { id: "AU", name: "Úc", lat: -25.2744, lng: 133.7751, gdp: 1680, fdi: 61, tradeBalance: 70, reserves: 55, debt: 900 },
-                // Các nước còn lại
                 { id: "PH", name: "Philippines", lat: 12.8797, lng: 121.7740, gdp: 436, fdi: 9, tradeBalance: -15, reserves: 98, debt: 115 },
                 { id: "AE", name: "UAE", lat: 23.4241, lng: 53.8478, gdp: 509, fdi: 22, tradeBalance: 80, reserves: 115, debt: 150 },
                 { id: "SA", name: "Ả Rập Xê Út", lat: 23.8859, lng: 45.0792, gdp: 1060, fdi: 12, tradeBalance: 120, reserves: 450, debt: 250 },
@@ -222,7 +247,7 @@ async function seedRealData() {
                 { id: "RU", name: "Nga", lat: 61.5240, lng: 105.3188, gdp: 1997, fdi: -15, tradeBalance: 120, reserves: 590, debt: 350 }
             ];
             await Country.insertMany(topCountries);
-            console.log("✅ Đã nạp xong bản đồ 40 quốc gia + Dữ liệu thống kê CỰC XỊN!");
+            console.log("✅ Đã nạp xong bản đồ 40 quốc gia + Dữ liệu thống kê!");
         } else {
             console.log("✅ Dữ liệu DB đã chuẩn, không cần nạp lại.");
         }
@@ -230,3 +255,8 @@ async function seedRealData() {
         console.error("❌ Lỗi khi nạp data:", error);
     }
 }
+
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => {
+    console.log(`🚀 Backend Global Cash Flow đang chạy tại port ${PORT}`);
+});
