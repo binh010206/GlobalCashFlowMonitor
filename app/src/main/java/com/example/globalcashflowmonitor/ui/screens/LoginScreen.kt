@@ -148,6 +148,10 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onNavigateToRegister: () -> Unit, on
                                     val conn = url.openConnection() as HttpURLConnection
                                     conn.requestMethod = "POST"
                                     conn.setRequestProperty("Content-Type", "application/json")
+
+                                    conn.connectTimeout = 15000
+                                    conn.readTimeout = 15000
+
                                     conn.doOutput = true
 
                                     val jsonParam = JSONObject().apply {

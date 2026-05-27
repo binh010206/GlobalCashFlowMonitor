@@ -62,10 +62,14 @@ const userSchema = new mongoose.Schema({
 const User = mongoose.model('User', userSchema);
 
 
+
 // =========================================
 // 3. ĐĂNG KÝ API RESTFUL
 // =========================================
 app.use('/api/chat', require('./routes/chatRoute'));
+
+app.use('/api/chat', require('./routes/chatRoute'));
+app.use('/api/auth', require('./routes/authRoute'));
 
 // API: Kéo 10 Cảnh báo mới nhất
 app.get('/api/alerts', async (req, res) => {
