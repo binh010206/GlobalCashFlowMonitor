@@ -40,7 +40,7 @@ fun RainBackgroundRegister() {
     val rainDrops = remember { List(40) { RainDrop(Random.nextFloat(), Random.nextFloat(), Random.nextFloat() * 0.02f + 0.01f, Random.nextFloat() * 50f + 20f, Random.nextFloat() * 0.5f + 0.1f) } }
     val infiniteTransition = rememberInfiniteTransition()
     val time by infiniteTransition.animateFloat(initialValue = 0f, targetValue = 1f, animationSpec = infiniteRepeatable(animation = tween(1000, easing = LinearEasing)))
-    Canvas(modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A14))) {
+    Canvas(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         rainDrops.forEach { drop ->
             drop.y += drop.speed + (time * 0.0001f)
             if (drop.y > 1f) { drop.y = -0.1f; drop.x = Random.nextFloat() }
@@ -138,7 +138,8 @@ fun RegisterScreen(onRegisterSuccess: () -> Unit, onNavigateToLogin: () -> Unit)
                             isLoading = true
                             coroutineScope.launch(Dispatchers.IO) {
                                 try {
-                                    val url = URL("https://globalcashflowbackend.onrender.com/api/auth/register")
+                                   // val url = URL("https://globalcashflowbackend.onrender.com/api/auth/register")
+                                    val url = URL("http://10.0.2.2:5000/api/auth/register")
                                     val conn = url.openConnection() as HttpURLConnection
                                     conn.requestMethod = "POST"
                                     conn.setRequestProperty("Content-Type", "application/json")

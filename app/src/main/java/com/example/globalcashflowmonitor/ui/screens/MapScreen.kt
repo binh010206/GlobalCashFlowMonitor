@@ -119,7 +119,7 @@ fun MapScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A14))) {
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
 
         AndroidView(
             factory = { ctx ->

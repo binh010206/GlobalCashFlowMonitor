@@ -186,7 +186,7 @@ fun StatsScreen(isLoggedIn: Boolean, onNavigateToLogin: () -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF0A0A14))
+                .background(MaterialTheme.colorScheme.background)
                 .pointerInput(Unit) { detectTapGestures(onTap = { focusManager.clearFocus() }) }
                 .padding(top = 45.dp, start = 16.dp, end = 16.dp)
         ) {
