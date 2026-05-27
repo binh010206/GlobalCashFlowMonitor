@@ -69,6 +69,7 @@ data class SocketPayload(val countries: List<CountryData>, val flows: List<FlowD
 @Composable
 fun MapScreen(
     isLoggedIn: Boolean = false,
+    isDarkMode: Boolean = true,
     onNavigateToLogin: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -119,7 +120,7 @@ fun MapScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A14))) {
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
 
         AndroidView(
             factory = { ctx ->
@@ -133,6 +134,8 @@ fun MapScreen(
                     mapboxMapRef = mapboxMap
 
                     pointAnnotationManager = annotations.createPointAnnotationManager()
+
+                    val mapStyle = if (isDarkMode) Style.DARK else Style.LIGHT
 
                     mapboxMap.loadStyleUri(Style.DARK) { style ->
                         setupFlowLayers(style)
@@ -148,7 +151,16 @@ fun MapScreen(
                     )
                 }
             },
-            update = { mapView -> updateFlowDataOnMap(mapView, activeFlows, realTimeData) },
+            update = { mapView ->
+                val currentStyle = if (isDarkMode) Style.DARK else Style.LIGHT
+                mapView.getMapboxMap().getStyle { style ->
+                    if (style.styleURI != currentStyle) {
+                        mapView.getMapboxMap().loadStyleUri(currentStyle) { newStyle ->
+                            setupFlowLayers(newStyle)
+                        }
+                    }
+                }
+                updateFlowDataOnMap(mapView, activeFlows, realTimeData) },
             modifier = Modifier.fillMaxSize().zIndex(0f)
         )
 

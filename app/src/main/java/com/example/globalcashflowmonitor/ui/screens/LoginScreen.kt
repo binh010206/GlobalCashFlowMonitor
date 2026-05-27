@@ -49,7 +49,7 @@ fun RainBackground() {
     val infiniteTransition = rememberInfiniteTransition()
     val time by infiniteTransition.animateFloat(initialValue = 0f, targetValue = 1f, animationSpec = infiniteRepeatable(animation = tween(1000, easing = LinearEasing)))
 
-    Canvas(modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A14))) {
+    Canvas(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         rainDrops.forEach { drop ->
             drop.y += drop.speed + (time * 0.0001f)
             if (drop.y > 1f) { drop.y = -0.1f; drop.x = Random.nextFloat() }
@@ -144,7 +144,8 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onNavigateToRegister: () -> Unit, on
                             isLoading = true
                             coroutineScope.launch(Dispatchers.IO) {
                                 try {
-                                    val url = URL("https://globalcashflowbackend.onrender.com/api/auth/login")
+                                    // val url = URL("https://globalcashflowbackend.onrender.com/api/auth/login")
+                                    val url = URL("http://10.0.2.2:5000/api/auth/login")
                                     val conn = url.openConnection() as HttpURLConnection
                                     conn.requestMethod = "POST"
                                     conn.setRequestProperty("Content-Type", "application/json")

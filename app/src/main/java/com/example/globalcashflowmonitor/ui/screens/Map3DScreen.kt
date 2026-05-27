@@ -109,6 +109,8 @@ fun Map3DScreen(onClose: () -> Unit) {
             update = { mapView ->
                 val mapboxMap = mapView.getMapboxMap()
 
+
+
                 // Góc Camera chuẩn để thấy hòn đảo nổi
                 mapboxMap.setCamera(
                     CameraOptions.Builder()
@@ -181,7 +183,7 @@ fun Map3DScreen(onClose: () -> Unit) {
             // 🌟 MẠNG NHỆN ĐÃ CÓ CHỮ CHÚ THÍCH CỰC RÕ
             Column(
                 modifier = Modifier
-                    .background(Color(0xFF0A0A14).copy(alpha = 0.8f), RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.8f), RoundedCornerShape(16.dp))
                     .border(1.dp, Color(0xFF2A2A35), RoundedCornerShape(16.dp))
                     .padding(12.dp)
             ) {
@@ -195,7 +197,7 @@ fun Map3DScreen(onClose: () -> Unit) {
             // 🌟 TIMELINE (NĂM)
             Column(
                 modifier = Modifier
-                    .background(Color(0xFF0A0A14).copy(alpha = 0.8f), RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.8f), RoundedCornerShape(16.dp))
                     .border(1.dp, Color(0xFF2A2A35), RoundedCornerShape(16.dp))
                     .padding(12.dp)
             ) {
