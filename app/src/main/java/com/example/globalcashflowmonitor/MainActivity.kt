@@ -1,5 +1,6 @@
 package com.example.globalcashflowmonitor
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -12,40 +13,59 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import com.example.globalcashflowmonitor.ui.components.BottomNavBar
 import com.example.globalcashflowmonitor.ui.theme.GlobalCashFlowMonitorTheme
-import com.example.globalcashflowmonitor.ui.screens.MapScreen
-import com.example.globalcashflowmonitor.ui.screens.SettingsScreen
-import com.example.globalcashflowmonitor.ui.screens.AiScreen
-
-
-
+import com.example.globalcashflowmonitor.ui.screens.*
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
         setContent {
-            GlobalCashFlowMonitorTheme(darkTheme = true) {
+            // 1. KHAI BÁO CÁC BIẾN TRẠNG THÁI Ở ĐÂY (TRONG SCOPE CỦA BỘ NHỚ)
+            val context = this
+            val sharedPref = remember { context.getSharedPreferences("MacroAppPrefs", Context.MODE_PRIVATE) }
 
-                // Trạng thái lưu xem đang ở màn hình nào (0 = Map, 1 = Stats, 2 = AI)
-                var currentScreen by remember { mutableStateOf(0) }
+            var isDarkMode by remember { mutableStateOf(sharedPref.getBoolean("DARK_MODE", true)) }
+            var isLoggedIn by remember { mutableStateOf(sharedPref.getBoolean("IS_LOGGED_IN", false)) }
+            var currentScreen by remember { mutableStateOf(0) }
+            var targetCountryIdToZoom by remember { mutableStateOf<String?>(null) }
 
+            // Các biến phục vụ Auth
+            var showAuthScreen by remember { mutableStateOf(false) }
+            var authScreenType by remember { mutableStateOf("LOGIN") }
+
+            GlobalCashFlowMonitorTheme(darkTheme = isDarkMode) {
                 Scaffold(
                     bottomBar = {
-                        BottomNavBar(selectedTab = currentScreen, onTabSelected = { currentScreen = it })
+                        BottomNavBar(
+                            selectedTab = currentScreen,
+                            onTabSelected = { currentScreen = it }
+                        )
                     }
                 ) { innerPadding ->
                     Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
 
                         // ĐIỀU PHỐI MÀN HÌNH CHÍNH
                         when (currentScreen) {
-                            // Số 0: Hiện màn hình Bản đồ (Tạm thời để chữ chờ mình code file MapScreen.kt)
-                            0 -> MapScreen()
-                            // Số 1: Hiện màn hình Thống kê
-                            1 -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Màn hình Thống kê", color = Color.White) }
-
-                            // Số 2: Hiện màn hình AI
+                            0 -> MapScreen(
+                                isLoggedIn = isLoggedIn,
+                                isDarkMode = isDarkMode,
+                                targetCountryId = targetCountryIdToZoom,
+                                onZoomCompleted = { targetCountryIdToZoom = null },
+                                onNavigateToLogin = { authScreenType = "LOGIN"; showAuthScreen = true }
+                            )
+                            1 -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("Màn hình Thống kê", color = if(isDarkMode) Color.White else Color.Black)
+                            }
                             2 -> AiScreen()
-                            3 -> SettingsScreen()
+                            3 -> SettingsScreen(
+                                onLogout = { isLoggedIn = false },
+                                isDarkMode = isDarkMode,
+                                onThemeChange = { newTheme: Boolean ->
+                                    isDarkMode = newTheme
+                                    sharedPref.edit().putBoolean("DARK_MODE", newTheme).apply()
+                                }
+                            )
                         }
                     }
                 }

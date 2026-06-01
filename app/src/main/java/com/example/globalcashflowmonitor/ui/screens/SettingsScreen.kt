@@ -14,7 +14,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(onLogout: () -> Unit, isDarkMode: Boolean, onThemeChange: Function<Unit>) {
     // Các biến trạng thái (State) để lưu lựa chọn của người dùng
     var isDarkMode by remember { mutableStateOf(true) }
     var isColorBlindMode by remember { mutableStateOf(false) }
