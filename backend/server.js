@@ -47,8 +47,8 @@ async function seedDataFromExcel() {
         data.forEach((row) => {
             // Bao lô luôn cả trường hợp cột có dấu cách hoặc không có dấu cách
             results.push({
-                countryId: row['CountryName'] || row['Country Name'],
-                countryName: row['CountryCode'] || row['Country Code'],
+                countryId: row['CountryCode'] || row['Country Code'],
+                countryName: row['CountryName'] || row['Country Name'],
                 metrics: [
                     {
                         name: "GDP",
