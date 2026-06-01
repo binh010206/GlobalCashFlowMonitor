@@ -1,7 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
-const fs = require('fs');
-const csv = require('csv-parser');
+const xlsx = require('xlsx'); // <--- DÙNG THƯ VIỆN EXCEL XỊN SÒ
 const cors = require('cors');
 
 const app = express();
@@ -13,10 +12,10 @@ const MONGO_URI = "mongodb+srv://globalcashflowmonitor:global123%40@cluster0.xjh
 
 mongoose.connect(MONGO_URI).then(() => {
     console.log("✅ Đã kết nối MongoDB!");
-    seedDataFromCSV(); // Gọi hàm nạp data khi bật server
+    seedDataFromExcel(); // Gọi hàm mới
 }).catch(err => console.error("❌ Lỗi kết nối MongoDB:", err));
 
-// 2. SCHEMA: Cấu trúc Dữ liệu trên Database
+// 2. SCHEMA
 const countryTimelineSchema = new mongoose.Schema({
     countryId: String,
     countryName: String,
@@ -30,79 +29,79 @@ const countryTimelineSchema = new mongoose.Schema({
 });
 const CountryTimeline = mongoose.model('CountryTimeline', countryTimelineSchema);
 
-// 3. HÀM QUÉT CSV VÀ NẠP LÊN MONGODB
-async function seedDataFromCSV() {
+// 3. HÀM QUÉT THẲNG FILE EXCEL (.XLSX)
+async function seedDataFromExcel() {
     try {
         console.log("🧹 Đang dọn dẹp kho dữ liệu cũ...");
-        // DÒNG NÀY SẼ XÓA SẠCH DATA CŨ MỖI KHI RESTART SERVER (THAY VÌ BỎ QUA NHƯ TRƯỚC)
-        await CountryTimeline.deleteMany({}); 
+        await CountryTimeline.deleteMany({}); // Xóa sạch data rác cũ
 
-        console.log("⏳ Đang phân tích file CSV và nạp data mới...");
+        console.log("⏳ Đang đọc trực tiếp file Excel...");
         const results = [];
-
-        // Hàm quy đổi số thô ra Tỷ USD (VD: 433000000000 -> 433.00)
         const toBillion = (val) => val ? parseFloat((Number(val) / 1000000000).toFixed(2)) : 0;
 
-        fs.createReadStream('Global_Cashflow_2020_2024.csv') // Nhớ đổi đúng cái đuôi .csv mày vừa làm nhé
-          .pipe(csv())
-          .on('data', (row) => {
-              results.push({
-                  countryId: row.CountryCode,
-                  countryName: row.CountryName,
-                  metrics: [
-                      {
-                          name: "GDP",
-                          history: [
-                              { year: 2020, value: toBillion(row.GDP20) }, { year: 2021, value: toBillion(row.GDP21) },
-                              { year: 2022, value: toBillion(row.GDP22) }, { year: 2023, value: toBillion(row.GDP23) },
-                              { year: 2024, value: toBillion(row.GDP24) }
-                          ]
-                      },
-                      {
-                          name: "FDI Inflows",
-                          history: [
-                              { year: 2020, value: toBillion(row.FDI_In20) }, { year: 2021, value: toBillion(row.FDI_In21) },
-                              { year: 2022, value: toBillion(row.FDI_In22) }, { year: 2023, value: toBillion(row.FDI_In23) },
-                              { year: 2024, value: toBillion(row.FDI_In24) }
-                          ]
-                      },
-                      {
-                          name: "FDI Outflows",
-                          history: [
-                              { year: 2020, value: toBillion(row.FDI_Out20) }, { year: 2021, value: toBillion(row.FDI_Out21) },
-                              { year: 2022, value: toBillion(row.FDI_Out22) }, { year: 2023, value: toBillion(row.FDI_Out23) },
-                              { year: 2024, value: toBillion(row.FDI_Out24) }
-                          ]
-                      },
-                      {
-                          name: "Exports",
-                          history: [
-                              { year: 2020, value: toBillion(row.Export20) }, { year: 2021, value: toBillion(row.Export21) },
-                              { year: 2022, value: toBillion(row.Export22) }, { year: 2023, value: toBillion(row.Export23) },
-                              { year: 2024, value: toBillion(row.Export24) }
-                          ]
-                      },
-                      {
-                          name: "Imports",
-                          history: [
-                              { year: 2020, value: toBillion(row.Import20) }, { year: 2021, value: toBillion(row.Import21) },
-                              { year: 2022, value: toBillion(row.Import22) }, { year: 2023, value: toBillion(row.Import23) },
-                              { year: 2024, value: toBillion(row.Import24) }
-                          ]
-                      }
-                  ]
-              });
-          })
-          .on('end', async () => {
-              await CountryTimeline.insertMany(results);
-              console.log(`✅ Tuyệt vời! Đã nạp thành công ${results.length} quốc gia mới lên MongoDB!`);
-          });
+        // Đọc thẳng file Excel
+        const workbook = xlsx.readFile('Global_Cashflow_2020_2024.xlsx');
+        const sheetName = workbook.SheetNames[0]; // Lấy sheet đầu tiên
+        const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]); // Tự động biến thành JSON mượt mà
+
+        data.forEach((row) => {
+            // Bao lô luôn cả trường hợp cột có dấu cách hoặc không có dấu cách
+            results.push({
+                countryId: row['CountryCode'] || row['Country Code'],
+                countryName: row['CountryName'] || row['Country Name'],
+                metrics: [
+                    {
+                        name: "GDP",
+                        history: [
+                            { year: 2020, value: toBillion(row['GDP20']) }, { year: 2021, value: toBillion(row['GDP21']) },
+                            { year: 2022, value: toBillion(row['GDP22']) }, { year: 2023, value: toBillion(row['GDP23']) },
+                            { year: 2024, value: toBillion(row['GDP24']) }
+                        ]
+                    },
+                    {
+                        name: "FDI Inflows",
+                        history: [
+                            { year: 2020, value: toBillion(row['FDI_In20']) }, { year: 2021, value: toBillion(row['FDI_In21']) },
+                            { year: 2022, value: toBillion(row['FDI_In22']) }, { year: 2023, value: toBillion(row['FDI_In23']) },
+                            { year: 2024, value: toBillion(row['FDI_In24']) }
+                        ]
+                    },
+                    {
+                        name: "FDI Outflows",
+                        history: [
+                            { year: 2020, value: toBillion(row['FDI_Out20']) }, { year: 2021, value: toBillion(row['FDI_Out21']) },
+                            { year: 2022, value: toBillion(row['FDI_Out22']) }, { year: 2023, value: toBillion(row['FDI_Out23']) },
+                            { year: 2024, value: toBillion(row['FDI_Out24']) }
+                        ]
+                    },
+                    {
+                        name: "Exports",
+                        history: [
+                            { year: 2020, value: toBillion(row['Export20']) }, { year: 2021, value: toBillion(row['Export21']) },
+                            { year: 2022, value: toBillion(row['Export22']) }, { year: 2023, value: toBillion(row['Export23']) },
+                            { year: 2024, value: toBillion(row['Export24']) }
+                        ]
+                    },
+                    {
+                        name: "Imports",
+                        history: [
+                            { year: 2020, value: toBillion(row['Import20']) }, { year: 2021, value: toBillion(row['Import21']) },
+                            { year: 2022, value: toBillion(row['Import22']) }, { year: 2023, value: toBillion(row['Import23']) },
+                            { year: 2024, value: toBillion(row['Import24']) }
+                        ]
+                    }
+                ]
+            });
+        });
+
+        await CountryTimeline.insertMany(results);
+        console.log(`✅ Tuyệt vời! Đã nạp thành công ${results.length} quốc gia từ Excel lên MongoDB!`);
     } catch (err) {
         console.error("❌ Lỗi khi import data:", err);
     }
 }
 
-// 4. API TỔNG: HỐT TRỌN 30 NƯỚC (Dùng cho vẽ Heatmap)
+// 4. API TỔNG: HỐT TRỌN 36 NƯỚC 
 app.get('/api/analytics', async (req, res) => {
     try {
         const allData = await CountryTimeline.find({});
@@ -112,15 +111,13 @@ app.get('/api/analytics', async (req, res) => {
     }
 });
 
-// 5. API ĐƠN: LẤY 1 NƯỚC (Dùng khi bấm vào cờ 1 nước)
+// 5. API ĐƠN: LẤY 1 NƯỚC 
 app.get('/api/analytics/:countryCode', async (req, res) => {
     try {
         const countryId = req.params.countryCode.toUpperCase();
         const data = await CountryTimeline.findOne({ countryId: countryId });
         
-        if (!data) {
-            return res.status(404).json({ success: false, message: "Không tìm thấy dữ liệu nước này" });
-        }
+        if (!data) return res.status(404).json({ success: false, message: "Không tìm thấy dữ liệu nước này" });
         
         res.status(200).json({ success: true, data: data });
     } catch (err) {
