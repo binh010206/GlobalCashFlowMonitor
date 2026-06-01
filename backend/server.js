@@ -102,7 +102,7 @@ async function seedDataFromExcel() {
 }
 
 // 4. API TỔNG: HỐT TRỌN 36 NƯỚC 
-app.get('/api/analytics', async (req, res) => {
+app.get('/api/countrytimelines', async (req, res) => {
     try {
         const allData = await CountryTimeline.find({});
         res.status(200).json({ success: true, data: allData });
@@ -112,7 +112,7 @@ app.get('/api/analytics', async (req, res) => {
 });
 
 // 5. API ĐƠN: LẤY 1 NƯỚC 
-app.get('/api/analytics/:countryCode', async (req, res) => {
+app.get('/api/countrytimelines/:countryCode', async (req, res) => {
     try {
         const countryId = req.params.countryCode.toUpperCase();
         const data = await CountryTimeline.findOne({ countryId: countryId });
