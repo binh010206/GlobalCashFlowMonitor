@@ -14,9 +14,10 @@
     "@google/generative-ai": "^0.24.1",
     "axios": "^1.16.1",
     "cors": "^2.8.6",
+    "csv-parser": "^3.2.1",
     "dotenv": "^16.6.1",
     "express": "^5.2.1",
-    "mongoose": "^9.6.2",
+    "mongoose": "^9.6.3",
     "socket.io": "^4.8.3"
   }
 }
