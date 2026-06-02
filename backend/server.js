@@ -6,21 +6,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ==========================================
-// 1. KẾT NỐI MONGODB 
-// ==========================================
+
+//KẾT NỐI MONGODB 
+
 const MONGO_URI = "mongodb+srv://globalcashflowmonitor:global123%40@cluster0.xjhpeid.mongodb.net/globalcashflow?retryWrites=true&w=majority&appName=Cluster0";
 
 mongoose.connect(MONGO_URI)
     .then(() => console.log("✅ Đã kết nối MongoDB thành công!"))
     .catch(err => console.error("❌ Lỗi kết nối MongoDB:", err));
 
-
-// ==========================================
-// 2. KHAI BÁO CÁC SCHEMA (BẢNG TRONG DATABASE)
-// ==========================================
-
-// BẢNG 1: DỮ LIỆU CÁC NƯỚC (COUNTRY TIMELINE)
 const countryTimelineSchema = new mongoose.Schema({
     countryId: String,
     countryName: String,
@@ -53,23 +47,35 @@ const chatSchema = new mongoose.Schema({
 const ChatMessage = mongoose.model('ChatMessage', chatSchema);
 
 
-// ==========================================
-// 3. CÁC API XỬ LÝ (PHẢI NẰM DƯỚI SCHEMA)
-// ==========================================
 
-// --- API DỮ LIỆU QUỐC GIA ---
+// 3. CÁC API XỬ LÝ 
+
 app.get('/api/countrytimelines', async (req, res) => {
     try {
         const allData = await CountryTimeline.find({});
+        
+        // LƯU 1 THÔNG BÁO VÀO MONGODB
+        await Notification.create({
+            title: "Hệ thống đồng bộ",
+            content: `✅ Đã kết nối và đồng bộ thành công dữ liệu ${allData.length} quốc gia.`,
+            isSuccess: true
+        });
+
         res.status(200).json({ success: true, data: allData });
     } catch (err) {
+        //  LỖI 
+        await Notification.create({
+            title: "Lỗi hệ thống",
+            content: `❌ Mất kết nối CSDL, không thể tải dữ liệu.`,
+            isSuccess: false
+        });
         res.status(500).json({ success: false, message: "Lỗi DB" });
     }
 });
 
 
 // --- API QUẢN LÝ THÔNG BÁO ---
-// Lấy thông báo mới nhất
+
 app.get('/api/notifications', async (req, res) => {
     try {
         const notis = await Notification.find().sort({ createdAt: -1 }); 
@@ -79,7 +85,7 @@ app.get('/api/notifications', async (req, res) => {
     }
 });
 
-// Xóa sạch thông báo (Đã đọc)
+
 app.post('/api/notifications/clear', async (req, res) => {
     try {
         await Notification.deleteMany({});
@@ -90,8 +96,8 @@ app.post('/api/notifications/clear', async (req, res) => {
 });
 
 
-// --- API TRỢ LÝ AI (OPENROUTER) & CHAT HISTORY ---
-// Lấy lịch sử Chat
+
+
 app.get('/api/chat/history', async (req, res) => {
     try {
         const history = await ChatMessage.find().sort({ createdAt: 1 });
@@ -101,7 +107,7 @@ app.get('/api/chat/history', async (req, res) => {
     }
 });
 
-// Xóa sạch lịch sử Chat
+
 app.post('/api/chat/clear', async (req, res) => {
     try {
         await ChatMessage.deleteMany({});
@@ -111,7 +117,6 @@ app.post('/api/chat/clear', async (req, res) => {
     }
 });
 
-// Gọi OpenRouter AI và Lưu vào MongoDB
 app.post('/api/chat', async (req, res) => {
     try {
         const userMessage = req.body.message;
@@ -159,8 +164,5 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
-// ==========================================
-// 4. MỞ CỔNG SERVER CHẠY 
-// ==========================================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🚀 Server Vĩ Mô đang chạy tại cổng ${PORT}`));
