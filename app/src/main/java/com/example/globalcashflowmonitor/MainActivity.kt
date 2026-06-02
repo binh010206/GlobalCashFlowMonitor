@@ -34,6 +34,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.example.globalcashflowmonitor.ui.theme.GlobalCashFlowMonitorTheme
 import com.example.globalcashflowmonitor.ui.screens.*
+import com.example.globalcashflowmonitor.network.CountryTimeline
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,12 +62,30 @@ fun MainAppFlow() {
     var currentScreen by remember { mutableStateOf(0) }
     var targetCountryIdToZoom by remember { mutableStateOf<String?>(null) }
 
+    // ====== QUẢN LÝ ĐIỀU HƯỚNG PHÒNG CHAT ======
+    var selectedChatRoomId by remember { mutableStateOf<String?>(null) }
+    var selectedChatRoomName by remember { mutableStateOf("") }
+
+    // ====== LẤY DỮ LIỆU ĐỂ TRUYỀN VÀO THỐNG KÊ ======
+    var globalCountriesList by remember { mutableStateOf<List<CountryTimeline>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            try {
+                val response = com.example.globalcashflowmonitor.network.RetrofitClient.instance.getAllTimelines()
+                if (response.success && response.data.isNotEmpty()) {
+                    globalCountriesList = response.data
+                }
+            } catch (e: Exception) { }
+            delay(15000)
+        }
+    }
+
     // Bảo vệ chuyển Tab
     fun navigateToTab(tabIndex: Int) {
-        val premiumTabs = listOf(1, 3, 4)
-        // Tạm thời mở cửa tự do cho mày test đỡ phải đăng nhập rườm rà.
-        // Nếu muốn khóa thì bỏ comment dòng if dưới đây:
-        // if (tabIndex in premiumTabs && !isLoggedIn) { ... } else { currentScreen = tabIndex }
+        if (tabIndex != 3) {
+            // Thoát khỏi phòng chat nếu bấm sang Tab khác (Reset lại)
+            selectedChatRoomId = null
+        }
         currentScreen = tabIndex
     }
 
@@ -74,14 +94,12 @@ fun MainAppFlow() {
 
         Box(modifier = Modifier.fillMaxSize().background(rootBgColor)) {
 
-            // ==================================================
-            // 1. LỚP MÀN HÌNH NỘI DUNG (CÁC TAB)
-            // ==================================================
             Scaffold(
                 modifier = Modifier.zIndex(1f),
                 containerColor = Color.Transparent
             ) { innerPadding ->
                 Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+
                     when (currentScreen) {
                         0 -> MapScreen(
                             isLoggedIn = isLoggedIn,
@@ -91,27 +109,41 @@ fun MainAppFlow() {
                             onNavigateToLogin = { authScreenType = "LOGIN"; showAuthScreen = true }
                         )
 
-                        1 -> AiScreen() // Màn AI của mày
+                        1 -> PlaceholderScreen("Màn hình AI") // Nếu mày có file AiScreen thì đổi thành AiScreen()
 
-                        // Tao bọc 2 màn này bằng Placeholder để mày khỏi bị lỗi ĐỎ do thiếu file
-                        2 -> PlaceholderScreen("Màn hình Thống Kê (Đang xây dựng)")
-                        3 -> PlaceholderScreen("Màn hình Cộng Đồng (Đang xây dựng)")
+                        2 -> StatsScreen(countries = globalCountriesList) // Đã truyền Data thật
 
-                        4 -> SettingsScreen(
-                            onLogout = { isLoggedIn = false },
-                            isDarkMode = isDarkMode,
-                            onThemeChange = { newTheme ->
-                                isDarkMode = newTheme
-                                sharedPref.edit().putBoolean("DARK_MODE", newTheme).apply()
+                        3 -> {
+                            // Logic của phần Cộng đồng: Chọn phòng -> Vào phòng
+                            if (selectedChatRoomId == null) {
+                                ChatListScreen(
+                                    isDarkMode = isDarkMode,
+                                    onNavigateToRoom = { roomId, roomName ->
+                                        selectedChatRoomId = roomId
+                                        selectedChatRoomName = roomName
+                                    }
+                                )
+                            } else {
+                                ChatScreen(
+                                    roomId = selectedChatRoomId!!,
+                                    roomName = selectedChatRoomName,
+                                    isDarkMode = isDarkMode,
+                                    onBackClick = { selectedChatRoomId = null },
+                                    onNavigateToMap = { countryId ->
+
+                                        targetCountryIdToZoom = countryId
+                                        currentScreen = 0
+                                    }
+                                )
                             }
-                        )
+                        }
+
+                        4 -> PlaceholderScreen("Màn hình Cài đặt") // Nếu có SettingsScreen thì đổi thành SettingsScreen(...)
                     }
                 }
             }
 
-            // ==================================================
-            // 2. BOTTOM MENU "TÍCH CHỈ"
-            // ==================================================
+            // ======= THANH ĐIỀU HƯỚNG DƯỚI CÙNG =======
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -144,7 +176,7 @@ fun MainAppFlow() {
                     }
                 }
 
-                // NÚT FAB CENTER
+                // NÚT FAB CENTER (NÚT THỐNG KÊ MÀU VÀNG)
                 FloatingActionButton(
                     onClick = { navigateToTab(2) },
                     containerColor = Color(0xFFFFC107),
@@ -186,9 +218,6 @@ fun AnimatedNavItem(icon: ImageVector, label: String, isSelected: Boolean, onCli
     }
 }
 
-// ==================================================
-// MÀN HÌNH TẠM THỜI (Dùng cho tab chưa tạo file)
-// ==================================================
 @Composable
 fun PlaceholderScreen(title: String) {
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFF121212)), contentAlignment = Alignment.Center) {

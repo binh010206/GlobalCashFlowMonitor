@@ -69,11 +69,9 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileWriter
 import kotlin.math.abs
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+
 val globalFlagCache = mutableMapOf<String, Bitmap>()
 
-// Lớp này giúp KHÓA vòng lặp vô tận của Jetpack Compose
 class MapStateManager {
     var pointManager: PointAnnotationManager? = null
 }
@@ -92,7 +90,7 @@ fun MapScreen(
     val focusManager = LocalFocusManager.current
 
     var mapboxMapRef by remember { mutableStateOf<com.mapbox.maps.MapboxMap?>(null) }
-    val mapStateManager = remember { MapStateManager() } // Tránh lỗi trắng màn hình
+    val mapStateManager = remember { MapStateManager() }
 
     var realCountriesList by remember { mutableStateOf<List<CountryTimeline>>(emptyList()) }
     var isConnected by remember { mutableStateOf(false) }
@@ -118,11 +116,11 @@ fun MapScreen(
     var aiResponse by remember { mutableStateOf("Trợ lý AI sẵn sàng! Cần phân tích gì?") }
     var isAiOnline by remember { mutableStateOf(true) }
 
-    var isCacheReady by remember { mutableStateOf(false) } // CHỐNG TREO APP
+    var isCacheReady by remember { mutableStateOf(false) }
 
     val dataTabs = listOf("GDP", "FDI Inflow", "FDI Outflow", "Export", "Import")
 
-    // 1. KÉO DATA API (15 Giây 1 lần)
+    // 1. KÉO DATA API
     LaunchedEffect(Unit) {
         while (true) {
             try {
@@ -138,15 +136,15 @@ fun MapScreen(
         }
     }
 
-    // 2. CHẠY NGẦM CẮT ẢNH CỜ CHỐNG TREO MÁY
+    // 2. CHẠY NGẦM CẮT ẢNH CỜ
     LaunchedEffect(realCountriesList) {
         if (realCountriesList.isNotEmpty() && !isCacheReady) {
-            withContext(Dispatchers.IO) { // Luồng nền
+            withContext(Dispatchers.IO) {
                 realCountriesList.forEach { country ->
                     getCachedCircularFlag(context, getIso3Code(getSmartIsoCode(country)))
                 }
             }
-            isCacheReady = true // Bật cờ xanh cho Bản đồ vẽ
+            isCacheReady = true
         }
     }
 
@@ -157,13 +155,13 @@ fun MapScreen(
     Box(
         modifier = Modifier.fillMaxSize().background(Color.Black).pointerInput(Unit) { detectTapGestures(onTap = { focusManager.clearFocus() }) }
     ) {
-        // ================= BẢN ĐỒ MAPBOX (CHỜ RAM XỬ LÝ XONG MỚI CHẠY) =================
+        // ================= BẢN ĐỒ MAPBOX =================
         MapboxMap(
             modifier = Modifier.fillMaxSize().zIndex(0f),
             mapInitOptionsFactory = { ctx -> MapInitOptions(context = ctx, styleUri = Style.DARK, cameraOptions = CameraOptions.Builder().center(Point.fromLngLat(108.2022, 16.0544)).zoom(2.5).build()) }
         ) {
             MapEffect(isCacheReady) { mapView ->
-                if (!isCacheReady) return@MapEffect // Chưa cắt ảnh xong thì không vẽ
+                if (!isCacheReady) return@MapEffect
 
                 mapboxMapRef = mapView.mapboxMap
 
@@ -175,7 +173,6 @@ fun MapScreen(
                             val matchedCountry = realCountriesList.find {
                                 val isoCode = getIso3Code(getSmartIsoCode(it))
                                 val coords = getCountryCoordinates(isoCode)
-                                // Mở rộng vùng bấm để dính 100%
                                 abs(coords.first - clickedPoint.longitude()) < 0.5 && abs(coords.second - clickedPoint.latitude()) < 0.5
                             }
                             if (matchedCountry != null) selectedCountry = matchedCountry
@@ -282,14 +279,11 @@ fun MapScreen(
             FloatingActionButton(
                 onClick = {
                     notiTitle = "Trạng thái kết nối"
-
-                    // ĐỔI CÂU THÔNG BÁO Ở ĐÂY (Chia 2 trường hợp Xanh / Đỏ)
                     notiContent = if (isConnected) {
                         "✅ Hệ thống đang hoạt động ổn định. Đã kết nối cơ sở dữ liệu và sẵn sàng tải báo cáo."
                     } else {
                         "❌ Mất kết nối máy chủ! Vui lòng kiểm tra lại đường truyền mạng hoặc Backend."
                     }
-
                     isNotiSuccess = isConnected
                     showNotiDialog = true
                     hasUnreadNoti = false
@@ -513,92 +507,88 @@ fun MapScreen(
         }
 
         // ================= AI BOT =================
-            if (showAiBot) {
-                ModalBottomSheet(onDismissRequest = { showAiBot = false }, containerColor = Color(0xFF121224)) {
-                    // Thêm trạng thái cuộn cho khung Chat
-                    val chatScrollState = rememberScrollState()
+        if (showAiBot) {
+            ModalBottomSheet(onDismissRequest = { showAiBot = false }, containerColor = Color(0xFF121224)) {
+                val chatScrollState = rememberScrollState()
 
-                    Column(modifier = Modifier.fillMaxWidth().padding(16.dp).navigationBarsPadding()) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Rounded.SmartToy, null, tint = Color(0xFF00B0FF), modifier = Modifier.size(28.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("Trợ lý AI", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Column(modifier = Modifier.fillMaxWidth().padding(16.dp).navigationBarsPadding()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.SmartToy, null, tint = Color(0xFF00B0FF), modifier = Modifier.size(28.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Trợ lý AI", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
 
-                            Spacer(Modifier.width(8.dp))
-                            Box(modifier = Modifier.size(8.dp).background(if(isAiOnline) Color.Green else Color.Red, CircleShape))
-                            Text(if(isAiOnline) " ONLINE" else " OFFLINE", color = if(isAiOnline) Color.Green else Color.Red, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Box(modifier = Modifier.size(8.dp).background(if(isAiOnline) Color.Green else Color.Red, CircleShape))
+                        Text(if(isAiOnline) " ONLINE" else " OFFLINE", color = if(isAiOnline) Color.Green else Color.Red, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.height(12.dp))
 
-                        // KHUNG CHAT ĐÃ ĐƯỢC THÊM verticalScroll() ĐỂ VUỐT THOẢI MÁI
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 150.dp, max = 300.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color(0x1AFFFFFF))
-                                .padding(14.dp)
-                                .verticalScroll(chatScrollState) // Vuốt thả ga
-                        ) {
-                            Text(aiResponse, color = Color.LightGray, fontSize = 14.sp)
-                        }}
-                        Spacer(Modifier.height(16.dp))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 150.dp, max = 300.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color(0x1AFFFFFF))
+                            .padding(14.dp)
+                            .verticalScroll(chatScrollState)
+                    ) {
+                        Text(aiResponse, color = Color.LightGray, fontSize = 14.sp)
+                    }
+                    Spacer(Modifier.height(16.dp))
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            TextField(
-                                value = chatInput, onValueChange = { chatInput = it },
-                                placeholder = { Text("Bay tới Mỹ? Đóng lại?") },
-                                colors = TextFieldDefaults.colors(focusedContainerColor = Color(0x33000000), unfocusedContainerColor = Color(0x33000000), focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
-                                modifier = Modifier.weight(1f).clip(RoundedCornerShape(24.dp)).border(0.5.dp, Color.Gray, RoundedCornerShape(24.dp))
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            IconButton(
-                                onClick = {
-                                    focusManager.clearFocus()
-                                    if (chatInput.isNotBlank()) {
-                                        val q = chatInput
-                                        chatInput = ""
-                                        // CỘNG DỒN TIN NHẮN ĐỂ TẠO LỊCH SỬ CHAT TRÊN MÀN HÌNH
-                                        aiResponse += "\n\n👤 Bạn: $q\n🤖 AI: Đang xử lý..."
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextField(
+                            value = chatInput, onValueChange = { chatInput = it },
+                            placeholder = { Text("Bay tới Mỹ? Đóng lại?") },
+                            colors = TextFieldDefaults.colors(focusedContainerColor = Color(0x33000000), unfocusedContainerColor = Color(0x33000000), focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
+                            modifier = Modifier.weight(1f).clip(RoundedCornerShape(24.dp)).border(0.5.dp, Color.Gray, RoundedCornerShape(24.dp))
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        IconButton(
+                            onClick = {
+                                focusManager.clearFocus()
+                                if (chatInput.isNotBlank()) {
+                                    val q = chatInput
+                                    chatInput = ""
+                                    aiResponse += "\n\n👤 Bạn: $q\n🤖 AI: Đang xử lý..."
 
-                                        // Tự động cuộn xuống dòng mới nhất
-                                        coroutineScope.launch { delay(100); chatScrollState.animateScrollTo(chatScrollState.maxValue) }
+                                    coroutineScope.launch { delay(100); chatScrollState.animateScrollTo(chatScrollState.maxValue) }
 
-                                        com.example.globalcashflowmonitor.network.RetrofitClient.instance.sendAiMessage(com.example.globalcashflowmonitor.network.ChatRequest(q)).enqueue(object : retrofit2.Callback<com.example.globalcashflowmonitor.network.ChatResponse> {
-                                            override fun onResponse(call: retrofit2.Call<com.example.globalcashflowmonitor.network.ChatResponse>, response: retrofit2.Response<com.example.globalcashflowmonitor.network.ChatResponse>) {
-                                                val aiData = response.body()?.data
-                                                if (aiData != null) {
-                                                    // Thay chữ Đang xử lý bằng câu trả lời thật
-                                                    aiResponse = aiResponse.replace("🤖 AI: Đang xử lý...", "🤖 AI: ${aiData.reply}")
-                                                    isAiOnline = true
+                                    com.example.globalcashflowmonitor.network.RetrofitClient.instance.sendAiMessage(com.example.globalcashflowmonitor.network.ChatRequest(q)).enqueue(object : retrofit2.Callback<com.example.globalcashflowmonitor.network.ChatResponse> {
+                                        override fun onResponse(call: retrofit2.Call<com.example.globalcashflowmonitor.network.ChatResponse>, response: retrofit2.Response<com.example.globalcashflowmonitor.network.ChatResponse>) {
+                                            val aiData = response.body()?.data
+                                            if (aiData != null) {
+                                                aiResponse = aiResponse.replace("🤖 AI: Đang xử lý...", "🤖 AI: ${aiData.reply}")
+                                                isAiOnline = true
 
-                                                    coroutineScope.launch { delay(100); chatScrollState.animateScrollTo(chatScrollState.maxValue) }
+                                                coroutineScope.launch { delay(100); chatScrollState.animateScrollTo(chatScrollState.maxValue) }
 
-                                                    when (aiData.action) {
-                                                        "ZOOM_TO" -> {
-                                                            val targetIso = getIso3Code(aiData.targetId)
-                                                            val (lng, lat) = getCountryCoordinates(targetIso)
-                                                            if (lng != 0.0) mapboxMapRef?.flyTo(CameraOptions.Builder().center(Point.fromLngLat(lng, lat)).zoom(4.5).build())
-                                                            showAiBot = false
-                                                        }
-                                                        "CLOSE_CHART" -> selectedCountry = null
+                                                when (aiData.action) {
+                                                    "ZOOM_TO" -> {
+                                                        val targetIso = getIso3Code(aiData.targetId)
+                                                        val (lng, lat) = getCountryCoordinates(targetIso)
+                                                        if (lng != 0.0) mapboxMapRef?.flyTo(CameraOptions.Builder().center(Point.fromLngLat(lng, lat)).zoom(4.5).build())
+                                                        showAiBot = false
                                                     }
+                                                    "CLOSE_CHART" -> selectedCountry = null
                                                 }
                                             }
-                                            override fun onFailure(call: retrofit2.Call<com.example.globalcashflowmonitor.network.ChatResponse>, t: Throwable) {
-                                                aiResponse = aiResponse.replace("🤖 AI: Đang xử lý...", "🤖 AI: ❌ Lỗi kết nối OpenRouter! Kiểm tra lại API Key ở Backend.")
-                                                isAiOnline = false
-                                            }
-                                        })
-                                    }
-                                },
-                                modifier = Modifier.clip(CircleShape).background(Color(0xFF00B0FF))
-                            ) { Icon(Icons.Rounded.Send, null, tint = Color.White) }
-                        }
+                                        }
+                                        override fun onFailure(call: retrofit2.Call<com.example.globalcashflowmonitor.network.ChatResponse>, t: Throwable) {
+                                            aiResponse = aiResponse.replace("🤖 AI: Đang xử lý...", "🤖 AI: ❌ Lỗi kết nối OpenRouter! Kiểm tra lại API Key ở Backend.")
+                                            isAiOnline = false
+                                        }
+                                    })
+                                }
+                            },
+                            modifier = Modifier.clip(CircleShape).background(Color(0xFF00B0FF))
+                        ) { Icon(Icons.Rounded.Send, null, tint = Color.White) }
                     }
                 }
             }
         }
+    }
+}
 
 @Composable
 fun LegendItem(icon: androidx.compose.ui.graphics.vector.ImageVector, color: Color, text: String) {
