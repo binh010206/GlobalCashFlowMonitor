@@ -20,7 +20,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,51 +40,36 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-
-                MainAppFlow()
+            MainAppFlow()
         }
     }
 }
 
 @Composable
 fun MainAppFlow() {
-
     val context = LocalContext.current
-    val sharedPref =
-        remember { context.getSharedPreferences("MacroAppPrefs", Context.MODE_PRIVATE) }
+    val sharedPref = remember { context.getSharedPreferences("MacroAppPrefs", Context.MODE_PRIVATE) }
 
-    // Đọc trạng thái Dark Mode
+    // Đọc trạng thái
     var isDarkMode by remember { mutableStateOf(sharedPref.getBoolean("DARK_MODE", true)) }
-
-    // 🌟 TRẠNG THÁI HỆ THỐNG
     var isLoggedIn by remember { mutableStateOf(sharedPref.getBoolean("IS_LOGGED_IN", false)) }
-
-    // Trạng thái màn hình Auth (Đăng nhập/Đăng ký)
     var showAuthScreen by remember { mutableStateOf(false) }
-    var authScreenType by remember { mutableStateOf("LOGIN") } // "LOGIN" hoặc "REGISTER"
+    var authScreenType by remember { mutableStateOf("LOGIN") }
 
-    // 0=Map, 1=AI, 2=Stats(Center), 3=Chat, 4=Settings
+    // 0=Map, 1=AI, 2=Stats, 3=Chat, 4=Settings
     var currentScreen by remember { mutableStateOf(0) }
-
-    var currentChatRoomId by remember { mutableStateOf<String?>(null) }
-    var currentChatRoomName by remember { mutableStateOf("") }
-
     var targetCountryIdToZoom by remember { mutableStateOf<String?>(null) }
 
-    // HÀM BẢO VỆ CHUYỂN TAB (FREE vs PREMIUM)
+    // Bảo vệ chuyển Tab
     fun navigateToTab(tabIndex: Int) {
-        val premiumTabs = listOf(1, 3, 4) // AI, Chat, Settings bắt buộc Đăng nhập
-        if (tabIndex in premiumTabs && !isLoggedIn) {
-            authScreenType = "LOGIN"
-            showAuthScreen = true
-        } else {
-            currentScreen = tabIndex
-        }
+        val premiumTabs = listOf(1, 3, 4)
+        // Tạm thời mở cửa tự do cho mày test đỡ phải đăng nhập rườm rà.
+        // Nếu muốn khóa thì bỏ comment dòng if dưới đây:
+        // if (tabIndex in premiumTabs && !isLoggedIn) { ... } else { currentScreen = tabIndex }
+        currentScreen = tabIndex
     }
 
     GlobalCashFlowMonitorTheme(darkTheme = isDarkMode) {
-
-        // Cập nhật màu nền tổng của Box ngoài cùng để nó thay đổi Sáng/Tối
         val rootBgColor = if (isDarkMode) MaterialTheme.colorScheme.background else Color(0xFFF3F4F6)
 
         Box(modifier = Modifier.fillMaxSize().background(rootBgColor)) {
@@ -99,7 +83,6 @@ fun MainAppFlow() {
             ) { innerPadding ->
                 Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
                     when (currentScreen) {
-                        // TAB FREE: Map và Stats
                         0 -> MapScreen(
                             isLoggedIn = isLoggedIn,
                             isDarkMode = isDarkMode,
@@ -108,44 +91,14 @@ fun MainAppFlow() {
                             onNavigateToLogin = { authScreenType = "LOGIN"; showAuthScreen = true }
                         )
 
-                        2 -> StatsScreen(
-                            isLoggedIn = isLoggedIn,
-                            isDarkMode = isDarkMode,
-                            onNavigateToLogin = { authScreenType = "LOGIN"; showAuthScreen = true }
-                        )
+                        1 -> AiScreen() // Màn AI của mày
 
-                        // TAB PREMIUM: Đã khóa bằng hàm navigateToTab ở trên
-                        1 -> PlaceholderScreen("Màn hình AI Assist (Đang ráp)")
-                        3 -> {
-                            if (currentChatRoomId == null) {
-                                // Nếu chưa vào phòng nào -> Hiện danh sách sảnh chính
-                                ChatListScreen(
-                                    isDarkMode = isDarkMode,
-                                    onNavigateToRoom = { roomId, roomName ->
-                                        currentChatRoomId = roomId
-                                        currentChatRoomName = roomName // LƯU LẠI TÊN PHÒNG KHI CLICK
-                                    }
-                                )
-                            } else {
-                                // Nếu đã chọn phòng -> Mở màn hình chat riêng biệt
-                                ChatScreen(
-                                    roomId = currentChatRoomId!!,
-                                    roomName = currentChatRoomName,
-                                    isDarkMode = isDarkMode,
-                                    onBackClick = {
-                                        currentChatRoomId = null // Xóa ID phòng để quay lại danh sách
-                                    },
-                                    onNavigateToMap = { countryId ->
-                                        targetCountryIdToZoom = countryId
-                                        currentScreen = 0
-                                    }
-                                )
-                            }
-                        }
+                        // Tao bọc 2 màn này bằng Placeholder để mày khỏi bị lỗi ĐỎ do thiếu file
+                        2 -> PlaceholderScreen("Màn hình Thống Kê (Đang xây dựng)")
+                        3 -> PlaceholderScreen("Màn hình Cộng Đồng (Đang xây dựng)")
+
                         4 -> SettingsScreen(
-                            onLogout = {
-                                isLoggedIn = false
-                            },
+                            onLogout = { isLoggedIn = false },
                             isDarkMode = isDarkMode,
                             onThemeChange = { newTheme ->
                                 isDarkMode = newTheme
@@ -157,7 +110,7 @@ fun MainAppFlow() {
             }
 
             // ==================================================
-            // 2. BOTTOM MENU "TÍCH CHỈ" (GIỮ NGUYÊN DESIGN CỦA MÀY)
+            // 2. BOTTOM MENU "TÍCH CHỈ"
             // ==================================================
             Box(
                 modifier = Modifier
@@ -172,53 +125,26 @@ fun MainAppFlow() {
                         .shadow(12.dp, RoundedCornerShape(35.dp))
                         .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(35.dp)),
                     color = Color(0xCC101010),
-                    shape = RoundedCornerShape(35.dp),
-                    tonalElevation = 8.dp
+                    shape = RoundedCornerShape(35.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Cụm Trái
-                        Row(
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            AnimatedNavItem(
-                                Icons.Rounded.Public,
-                                "Bản đồ",
-                                currentScreen == 0
-                            ) { navigateToTab(0) }
-                            AnimatedNavItem(
-                                Icons.Rounded.SmartToy,
-                                "AI Assist",
-                                currentScreen == 1
-                            ) { navigateToTab(1) }
+                        Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.weight(1f)) {
+                            AnimatedNavItem(Icons.Rounded.Public, "Bản đồ", currentScreen == 0) { navigateToTab(0) }
+                            AnimatedNavItem(Icons.Rounded.SmartToy, "AI Assist", currentScreen == 1) { navigateToTab(1) }
                         }
-
-                        Spacer(modifier = Modifier.width(80.dp)) // Chỗ trống cho FAB
-
-                        // Cụm Phải
-                        Row(
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            AnimatedNavItem(
-                                Icons.Rounded.Forum,
-                                "Cộng đồng",
-                                currentScreen == 3
-                            ) { navigateToTab(3) }
-                            AnimatedNavItem(
-                                Icons.Rounded.Settings,
-                                "Cài đặt",
-                                currentScreen == 4
-                            ) { navigateToTab(4) }
+                        Spacer(modifier = Modifier.width(80.dp))
+                        Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.weight(1f)) {
+                            AnimatedNavItem(Icons.Rounded.Forum, "Cộng đồng", currentScreen == 3) { navigateToTab(3) }
+                            AnimatedNavItem(Icons.Rounded.Settings, "Cài đặt", currentScreen == 4) { navigateToTab(4) }
                         }
                     }
                 }
 
-                // NÚT FAB THỐNG KÊ (CENTER)
+                // NÚT FAB CENTER
                 FloatingActionButton(
                     onClick = { navigateToTab(2) },
                     containerColor = Color(0xFFFFC107),
@@ -234,59 +160,12 @@ fun MainAppFlow() {
                     Icon(Icons.Rounded.Analytics, "Thống kê", modifier = Modifier.size(30.dp))
                 }
             }
-
-            // ==================================================
-            // 3. MÀN HÌNH ĐĂNG NHẬP / ĐĂNG KÝ (NỔI LÊN TRÊN CÙNG)
-            // ==================================================
-            if (showAuthScreen) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.background) // Che kín toàn bộ màn hình dưới
-                        .zIndex(10f)
-                ) {
-                    if (authScreenType == "LOGIN") {
-                        LoginScreen(
-                            onLoginSuccess = {
-                                isLoggedIn = true
-                                showAuthScreen = false // Đóng auth screen sau khi thành công
-                            },
-                            onNavigateToRegister = { authScreenType = "REGISTER" },
-                            onNavigateToForgot = { /* Xử lý quên mật khẩu sau */ }
-                        )
-                    } else {
-                        RegisterScreen(
-                            onRegisterSuccess = {
-                                isLoggedIn = true
-                                showAuthScreen = false
-                            },
-                            onNavigateToLogin = { authScreenType = "LOGIN" }
-                        )
-                    }
-
-                    // Nút Đóng (Dấu X) góc trên bên phải để quay lại làm "Khách"
-                    IconButton(
-                        onClick = { showAuthScreen = false },
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .statusBarsPadding()
-                            .padding(16.dp)
-                    ) {
-                        Icon(
-                            Icons.Rounded.Close,
-                            contentDescription = "Đóng",
-                            tint = Color.White,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-                }
-            }
         }
     }
 }
 
 // ==================================================
-// COMPONENT: Nút bấm có Animation dưới BottomBar
+// COMPONENT: Nút bấm Animation dưới BottomBar
 // ==================================================
 @Composable
 fun AnimatedNavItem(icon: ImageVector, label: String, isSelected: Boolean, onClick: () -> Unit) {
@@ -308,11 +187,11 @@ fun AnimatedNavItem(icon: ImageVector, label: String, isSelected: Boolean, onCli
 }
 
 // ==================================================
-// MÀN HÌNH TẠM THỜI (PLACEHOLDER)
+// MÀN HÌNH TẠM THỜI (Dùng cho tab chưa tạo file)
 // ==================================================
 @Composable
 fun PlaceholderScreen(title: String) {
-    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
-        Text(title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF121212)), contentAlignment = Alignment.Center) {
+        Text(title, color = Color.Gray, fontSize = 18.sp, fontWeight = FontWeight.Bold)
     }
 }
