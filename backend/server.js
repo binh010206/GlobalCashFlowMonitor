@@ -34,26 +34,21 @@ const chatSchema = new mongoose.Schema({
 });
 const ChatMessage = mongoose.model('ChatMessage', chatSchema);
 
-// SCHEMA CHO PHÒNG CHAT CỘNG ĐỒNG
 const roomSchema = new mongoose.Schema({
     name: String, createdAt: { type: Date, default: Date.now }
 });
 const Room = mongoose.model('Room', roomSchema);
 
-// SCHEMA CHO TIN NHẮN TRONG PHÒNG CỘNG ĐỒNG
+// ÉP CỨNG TÊN BẢNG CHO DỄ TÌM TRÊN ATLAS
 const groupMessageSchema = new mongoose.Schema({
-    roomId: String,
-    senderName: String,  
-    senderEmail: String, 
-    content: String,
-    type: { type: String, default: "TEXT" }, // TEXT, SYSTEM, DATA_CARD
-    countryId: { type: String, default: "" }, 
+    roomId: String, senderName: String, senderEmail: String, content: String,
+    type: { type: String, default: "TEXT" }, countryId: { type: String, default: "" }, 
     createdAt: { type: Date, default: Date.now }
 });
-const GroupMessage = mongoose.model('GroupMessage', groupMessageSchema);
+const GroupMessage = mongoose.model('GroupMessage', groupMessageSchema, 'groupmessages');
 
 // ==========================================
-// HÀM "MÁY HÚT BỤI" TỰ ĐỘNG DỌN RÁC
+// HÀM "MÁY HÚT BỤI" TỰ ĐỘNG DỌN RÁC (ÉP VỀ 100 DÒNG)
 // ==========================================
 async function cleanDatabase(Model, limit = 100) {
     try {
@@ -75,6 +70,8 @@ app.get('/api/countrytimelines', async (req, res) => {
     try {
         const allData = await CountryTimeline.find({});
         await Notification.create({ title: "Hệ thống đồng bộ", content: `✅ Đã kết nối và đồng bộ thành công dữ liệu ${allData.length} quốc gia.`, isSuccess: true });
+        
+        // Hút bụi bảng Notification
         await cleanDatabase(Notification, 100);
         res.status(200).json({ success: true, data: allData });
     } catch (err) {
@@ -84,16 +81,30 @@ app.get('/api/countrytimelines', async (req, res) => {
 });
 
 app.get('/api/notifications', async (req, res) => {
-    try { res.json({ success: true, data: await Notification.find().sort({ createdAt: -1 }) }); } 
-    catch (err) { res.json({ success: false }); }
+    try { res.json({ success: true, data: await Notification.find().sort({ createdAt: -1 }) }); } catch (err) { res.json({ success: false }); }
+});
+
+// API Xóa thủ công Thông báo (Đã hoàn trả)
+app.post('/api/notifications/clear', async (req, res) => {
+    try {
+        await Notification.deleteMany({});
+        res.json({ success: true, message: "Đã xóa sạch thông báo" });
+    } catch (err) { res.json({ success: false, message: "Lỗi xóa" }); }
 });
 
 // ==========================================
-// 4. API CHAT TRỢ LÝ AI (CÁ NHÂN)
+// 4. API CHAT TRỢ LÝ AI
 // ==========================================
 app.get('/api/chat/history', async (req, res) => {
-    try { res.json({ success: true, data: await ChatMessage.find().sort({ createdAt: 1 }) }); } 
-    catch (err) { res.json({ success: false }); }
+    try { res.json({ success: true, data: await ChatMessage.find().sort({ createdAt: 1 }) }); } catch (err) { res.json({ success: false }); }
+});
+
+// API Xóa thủ công Chat AI (Đã hoàn trả)
+app.post('/api/chat/clear', async (req, res) => {
+    try {
+        await ChatMessage.deleteMany({});
+        res.json({ success: true, message: "Đã xóa lịch sử Chat" });
+    } catch (err) { res.json({ success: false }); }
 });
 
 app.post('/api/chat', async (req, res) => {
@@ -101,10 +112,19 @@ app.post('/api/chat', async (req, res) => {
         const userMessage = req.body.message;
         await ChatMessage.create({ role: "user", content: userMessage });
 
-        const systemPrompt = `Bạn là Trợ lý AI Vĩ mô. BẮT BUỘC CHỈ trả lời bằng một chuỗi JSON hợp lệ. Định dạng chuẩn: {"reply": "câu trả lời", "action": "ZOOM_TO|NONE", "targetId": "VNM"}`;
+        // SIÊU PROMPT TỐI THƯỢNG
+        const systemPrompt = `Bạn là một Chuyên gia Kinh tế Vĩ mô cấp cao đang tư vấn trên hệ thống Global Cash Flow. 
+Nhiệm vụ của bạn là phân tích dữ liệu, giải thích các hiện tượng kinh tế một cách chuyên sâu nhưng dễ hiểu.
+QUAN TRỌNG: BẮT BUỘC toàn bộ câu trả lời của bạn phải là MỘT CHUỖI JSON HỢP LỆ. KHÔNG CÓ BẤT KỲ VĂN BẢN NÀO BÊN NGOÀI KHỐI JSON.
+Cấu trúc JSON yêu cầu:
+{
+    "reply": "Câu trả lời chi tiết của bạn (dùng \\n để xuống dòng, KHÔNG dùng markdown)",
+    "action": "ZOOM_TO" hoặc "NONE",
+    "targetId": "Mã quốc gia ISO Alpha-3 tương ứng"
+}`;
+
         const aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
+            method: "POST", headers: { "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
             body: JSON.stringify({ model: "openrouter/auto", messages: [ { role: "system", content: systemPrompt }, { role: "user", content: userMessage } ] })
         });
 
@@ -112,12 +132,12 @@ app.post('/api/chat', async (req, res) => {
         let botContent = data.choices[0].message.content.replace(/```json/gi, "").replace(/```/gi, "").trim();
         
         let resultJson;
-        try { resultJson = JSON.parse(botContent); } 
-        catch (parseError) { resultJson = { reply: botContent, action: "NONE", targetId: "" }; }
-
+        try { resultJson = JSON.parse(botContent); } catch (parseError) { resultJson = { reply: botContent, action: "NONE", targetId: "" }; }
+        
         await ChatMessage.create({ role: "ai", content: resultJson.reply });
+        
+        // Hút bụi bảng Chat AI
         await cleanDatabase(ChatMessage, 100);
-
         res.json({ success: true, data: resultJson });
     } catch (err) { res.status(500).json({ success: false }); }
 });
@@ -126,39 +146,33 @@ app.post('/api/chat', async (req, res) => {
 // 5. API CHAT CỘNG ĐỒNG (NHÓM)
 // ==========================================
 app.get('/api/rooms', async (req, res) => {
-    try {
-        const rooms = await Room.find().sort({ createdAt: -1 });
-        res.json({ success: true, data: rooms });
-    } catch (err) { res.status(500).json({ success: false }); }
+    try { res.json({ success: true, data: await Room.find().sort({ createdAt: -1 }) }); } catch (err) { res.status(500).json({ success: false }); }
 });
 
 app.post('/api/rooms', async (req, res) => {
     try {
-        const newRoom = await Room.create({ name: req.body.name || "Phòng thảo luận mới" });
-        await GroupMessage.create({
-            roomId: newRoom._id.toString(), senderName: "Hệ thống", senderEmail: "admin@system.com",
-            content: `Chào mừng đến với ${newRoom.name}!`, type: "SYSTEM"
+        const roomName = req.body.name || "Phòng thảo luận mới";
+        const newRoom = await Room.create({ name: roomName });
+        
+        // Tạo tin nhắn hệ thống đầu tiên
+        await GroupMessage.create({ 
+            roomId: newRoom._id.toString(), senderName: "Hệ thống", senderEmail: "admin@system.com", 
+            content: `Chào mừng đến với ${newRoom.name}!`, type: "SYSTEM" 
         });
         res.json({ success: true, data: newRoom });
-    } catch (err) { res.status(500).json({ success: false }); }
+    } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
 app.get('/api/rooms/:roomId/messages', async (req, res) => {
-    try {
-        const messages = await GroupMessage.find({ roomId: req.params.roomId }).sort({ createdAt: 1 });
-        res.json({ success: true, data: messages });
-    } catch (err) { res.status(500).json({ success: false }); }
+    try { res.json({ success: true, data: await GroupMessage.find({ roomId: req.params.roomId }).sort({ createdAt: 1 }) }); } catch (err) { res.status(500).json({ success: false }); }
 });
 
 app.post('/api/rooms/:roomId/messages', async (req, res) => {
     try {
         const { senderName, senderEmail, content, type, countryId } = req.body;
-        const newMsg = await GroupMessage.create({
-            roomId: req.params.roomId, senderName, senderEmail, content,
-            type: type || "TEXT", countryId: countryId || ""
-        });
+        const newMsg = await GroupMessage.create({ roomId: req.params.roomId, senderName, senderEmail, content, type: type || "TEXT", countryId: countryId || "" });
         
-        // Dọn rác: Giữ tối đa 100 tin nhắn mỗi phòng
+        // Hút bụi bảng GroupMessage của phòng hiện tại
         const msgCount = await GroupMessage.countDocuments({ roomId: req.params.roomId });
         if (msgCount > 100) {
             const oldest = await GroupMessage.find({ roomId: req.params.roomId }).sort({ createdAt: 1 }).limit(msgCount - 100);
@@ -170,7 +184,7 @@ app.post('/api/rooms/:roomId/messages', async (req, res) => {
 });
 
 // ==========================================
-// 6. API THỐNG KÊ (BONUS)
+// 6. API THỐNG KÊ TOÀN DIỆN
 // ==========================================
 app.get('/api/stats', async (req, res) => {
     try {
@@ -179,10 +193,7 @@ app.get('/api/stats', async (req, res) => {
             data: {
                 countries_loaded: await CountryTimeline.countDocuments(),
                 system_notifications: await Notification.countDocuments(),
-                ai_usage: {
-                    total_messages: await ChatMessage.countDocuments(),
-                    questions_asked: await ChatMessage.countDocuments({ role: "user" })
-                },
+                ai_usage: { total_messages: await ChatMessage.countDocuments(), questions_asked: await ChatMessage.countDocuments({ role: "user" }) },
                 community_rooms: await Room.countDocuments()
             }
         });
