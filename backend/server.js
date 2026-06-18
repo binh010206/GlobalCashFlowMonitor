@@ -6,10 +6,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ==========================================
-// 2. ĐỊNH NGHĨA BẢNG DỮ LIỆU (SCHEMAS)
-// (Phải định nghĩa trước để tí nữa gọi lệnh xóa luật)
-// ==========================================
+
 const countryTimelineSchema = new mongoose.Schema({
     countryId: String, countryName: String,
     metrics: [{ name: String, unit: String, history: [{ year: Number, value: Number }] }]
@@ -31,7 +28,6 @@ const roomSchema = new mongoose.Schema({
 });
 const Room = mongoose.model('Room', roomSchema);
 
-// ÉP CỨNG TÊN BẢNG CHO DỄ TÌM TRÊN ATLAS
 const groupMessageSchema = new mongoose.Schema({
     roomId: String, senderName: String, senderEmail: String, content: String,
     type: { type: String, default: "TEXT" }, countryId: { type: String, default: "" }, 
@@ -40,29 +36,25 @@ const groupMessageSchema = new mongoose.Schema({
 const GroupMessage = mongoose.model('GroupMessage', groupMessageSchema, 'groupmessages');
 
 
-// ==========================================
-// 1. KẾT NỐI MONGODB & TIÊU DIỆT LỖI E11000
-// ==========================================
+
 const MONGO_URI = "mongodb+srv://globalcashflowmonitor:global123%40@cluster0.xjhpeid.mongodb.net/globalcashflow?retryWrites=true&w=majority&appName=Cluster0";
 
 mongoose.connect(MONGO_URI)
     .then(async () => {
         console.log("✅ Đã kết nối MongoDB thành công!");
-        // ĐÂY LÀ ĐOẠN CODE "SÁT THỦ": ÉP MONGODB XÓA HẾT LUẬT CẤM TRÙNG LẶP!
+        
         try {
             await Room.collection.dropIndexes();
             await GroupMessage.collection.dropIndexes();
             console.log("✅ Đã tiêu diệt tận gốc lỗi trùng lặp E11000!");
         } catch (e) { 
-            // Bỏ qua nếu bảng chưa tồn tại
+            
         }
     })
     .catch(err => console.error("❌ Lỗi kết nối MongoDB:", err));
 
 
-// ==========================================
-// HÀM "MÁY HÚT BỤI" TỰ ĐỘNG DỌN RÁC (ÉP VỀ 100 DÒNG)
-// ==========================================
+
 async function cleanDatabase(Model, limit = 100) {
     try {
         const count = await Model.countDocuments();
@@ -76,9 +68,7 @@ async function cleanDatabase(Model, limit = 100) {
     } catch (err) { console.error(`❌ Lỗi khi dọn dẹp:`, err); }
 }
 
-// ==========================================
-// 3. API BẢN ĐỒ & THÔNG BÁO
-// ==========================================
+
 app.get('/api/countrytimelines', async (req, res) => {
     try {
         const allData = await CountryTimeline.find({});
@@ -102,9 +92,7 @@ app.post('/api/notifications/clear', async (req, res) => {
     } catch (err) { res.json({ success: false, message: "Lỗi xóa" }); }
 });
 
-// ==========================================
-// 4. API CHAT TRỢ LÝ AI
-// ==========================================
+
 app.get('/api/chat/history', async (req, res) => {
     try { res.json({ success: true, data: await ChatMessage.find().sort({ createdAt: 1 }) }); } catch (err) { res.json({ success: false }); }
 });
@@ -121,7 +109,7 @@ app.post('/api/chat', async (req, res) => {
         const userMessage = req.body.message;
         await ChatMessage.create({ role: "user", content: userMessage });
 
-        // ĐÂY LÀ SIÊU PROMPT DÀNH CHO AI (Đã tối ưu 100%)
+        
         const systemPrompt = `Bạn là một Chuyên gia Kinh tế Vĩ mô cấp cao đang tư vấn trên hệ thống Global Cash Flow. 
 Nhiệm vụ của bạn là phân tích dữ liệu, giải thích các hiện tượng kinh tế một cách chuyên sâu nhưng dễ hiểu.
 QUAN TRỌNG: BẮT BUỘC toàn bộ câu trả lời của bạn phải là MỘT CHUỖI JSON HỢP LỆ. KHÔNG CÓ BẤT KỲ VĂN BẢN NÀO BÊN NGOÀI KHỐI JSON.
@@ -149,9 +137,7 @@ Cấu trúc JSON yêu cầu:
     } catch (err) { res.status(500).json({ success: false }); }
 });
 
-// ==========================================
-// 5. API CHAT CỘNG ĐỒNG (NHÓM)
-// ==========================================
+
 app.get('/api/rooms', async (req, res) => {
     try { res.json({ success: true, data: await Room.find().sort({ createdAt: -1 }) }); } catch (err) { res.status(500).json({ success: false }); }
 });
@@ -189,9 +175,7 @@ app.post('/api/rooms/:roomId/messages', async (req, res) => {
     } catch (err) { res.status(500).json({ success: false }); }
 });
 
-// ==========================================
-// 6. API THỐNG KÊ TOÀN DIỆN
-// ==========================================
+
 app.get('/api/stats', async (req, res) => {
     try {
         res.json({

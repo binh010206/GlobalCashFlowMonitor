@@ -55,10 +55,9 @@ fun MainAppFlow() {
     // Đọc trạng thái
     var isDarkMode by remember { mutableStateOf(sharedPref.getBoolean("DARK_MODE", true)) }
     var isLoggedIn by remember { mutableStateOf(sharedPref.getBoolean("IS_LOGGED_IN", false)) }
-    var showAuthScreen by remember { mutableStateOf(false) }
-    var authScreenType by remember { mutableStateOf("LOGIN") }
+    var authScreenType by remember { mutableStateOf("LOGIN") } // Chuyển đổi giữa LOGIN, REGISTER, FORGOT
 
-    // 0=Map, 1=AI, 2=Stats, 3=Chat, 4=Settings
+    // 0=Map, 1=AI, 2=Stats, 3=Chat, 4=Settings/Auth
     var currentScreen by remember { mutableStateOf(0) }
     var targetCountryIdToZoom by remember { mutableStateOf<String?>(null) }
 
@@ -83,7 +82,6 @@ fun MainAppFlow() {
     // Bảo vệ chuyển Tab
     fun navigateToTab(tabIndex: Int) {
         if (tabIndex != 3) {
-            // Thoát khỏi phòng chat nếu bấm sang Tab khác (Reset lại)
             selectedChatRoomId = null
         }
         currentScreen = tabIndex
@@ -106,15 +104,14 @@ fun MainAppFlow() {
                             isDarkMode = isDarkMode,
                             targetCountryId = targetCountryIdToZoom,
                             onZoomCompleted = { targetCountryIdToZoom = null },
-                            onNavigateToLogin = { authScreenType = "LOGIN"; showAuthScreen = true }
+                            onNavigateToLogin = { authScreenType = "LOGIN"; navigateToTab(4) }
                         )
 
-                        1 -> PlaceholderScreen("Màn hình AI") // Nếu mày có file AiScreen thì đổi thành AiScreen()
+                        1 -> AiScreen(isLoggedIn = isLoggedIn)
 
-                        2 -> StatsScreen(countries = globalCountriesList) // Đã truyền Data thật
+                        2 -> StatsScreen(countries = globalCountriesList)
 
                         3 -> {
-                            // Logic của phần Cộng đồng: Chọn phòng -> Vào phòng
                             if (selectedChatRoomId == null) {
                                 ChatListScreen(
                                     isDarkMode = isDarkMode,
@@ -130,7 +127,6 @@ fun MainAppFlow() {
                                     isDarkMode = isDarkMode,
                                     onBackClick = { selectedChatRoomId = null },
                                     onNavigateToMap = { countryId ->
-
                                         targetCountryIdToZoom = countryId
                                         currentScreen = 0
                                     }
@@ -138,7 +134,41 @@ fun MainAppFlow() {
                             }
                         }
 
-                        4 -> PlaceholderScreen("Màn hình Cài đặt") // Nếu có SettingsScreen thì đổi thành SettingsScreen(...)
+                        // TRỌN BỘ MÀN HÌNH ĐĂNG NHẬP VÀ CÀI ĐẶT
+                        4 -> {
+                            if (isLoggedIn) {
+                                SettingsScreen(
+                                    onLogout = {
+                                        sharedPref.edit().putBoolean("IS_LOGGED_IN", false).apply()
+                                        isLoggedIn = false
+                                    },
+                                    onNavigateToForgot = {
+                                        // Bấm Quên Mật Khẩu ở Settings -> Đăng xuất và đá qua màn Khôi phục
+                                        sharedPref.edit().putBoolean("IS_LOGGED_IN", false).apply()
+                                        isLoggedIn = false
+                                        authScreenType = "FORGOT"
+                                    }
+                                )
+                            } else {
+                                when (authScreenType) {
+                                    "LOGIN" -> LoginScreen(
+                                        onLoginSuccess = {
+                                            isLoggedIn = true
+                                            currentScreen = 0 // TỰ VĂNG RA BẢN ĐỒ KHI ĐĂNG NHẬP
+                                        },
+                                        onNavigateToRegister = { authScreenType = "REGISTER" },
+                                        onNavigateToForgot = { authScreenType = "FORGOT" }
+                                    )
+                                    "REGISTER" -> RegisterScreen(
+                                        onRegisterSuccess = { authScreenType = "LOGIN" },
+                                        onNavigateToLogin = { authScreenType = "LOGIN" }
+                                    )
+                                    "FORGOT" -> ForgotPasswordScreen(
+                                        onNavigateBack = { authScreenType = "LOGIN" }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -166,7 +196,7 @@ fun MainAppFlow() {
                     ) {
                         Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.weight(1f)) {
                             AnimatedNavItem(Icons.Rounded.Public, "Bản đồ", currentScreen == 0) { navigateToTab(0) }
-                            AnimatedNavItem(Icons.Rounded.SmartToy, "AI Assist", currentScreen == 1) { navigateToTab(1) }
+                            AnimatedNavItem(Icons.Rounded.SmartToy, "Trợ lý AI", currentScreen == 1) { navigateToTab(1) }
                         }
                         Spacer(modifier = Modifier.width(80.dp))
                         Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.weight(1f)) {
@@ -176,20 +206,30 @@ fun MainAppFlow() {
                     }
                 }
 
-                // NÚT FAB CENTER (NÚT THỐNG KÊ MÀU VÀNG)
-                FloatingActionButton(
-                    onClick = { navigateToTab(2) },
-                    containerColor = Color(0xFFFFC107),
-                    contentColor = Color.Black,
-                    shape = CircleShape,
-                    elevation = FloatingActionButtonDefaults.elevation(12.dp),
-                    modifier = Modifier
-                        .size(60.dp)
-                        .align(Alignment.Center)
-                        .offset(y = (-35).dp)
-                        .scale(animateFloatAsState(if (currentScreen == 2) 1.1f else 1.0f).value)
+                // NÚT FAB CENTER
+                Column(
+                    modifier = Modifier.align(Alignment.Center).offset(y = (-20).dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(Icons.Rounded.Analytics, "Thống kê", modifier = Modifier.size(30.dp))
+                    FloatingActionButton(
+                        onClick = { navigateToTab(2) },
+                        containerColor = Color(0xFFFFC107),
+                        contentColor = Color.Black,
+                        shape = CircleShape,
+                        elevation = FloatingActionButtonDefaults.elevation(12.dp),
+                        modifier = Modifier
+                            .size(56.dp)
+                            .scale(animateFloatAsState(if (currentScreen == 2) 1.1f else 1.0f).value)
+                    ) {
+                        Icon(Icons.Rounded.Analytics, "Thống kê", modifier = Modifier.size(28.dp))
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Thống kê",
+                        color = if (currentScreen == 2) Color(0xFFFFC107) else Color.Gray,
+                        fontSize = 11.sp,
+                        fontWeight = if (currentScreen == 2) FontWeight.Bold else FontWeight.Normal
+                    )
                 }
             }
         }
