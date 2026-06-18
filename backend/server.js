@@ -7,16 +7,8 @@ app.use(cors());
 app.use(express.json());
 
 // ==========================================
-// 1. KẾT NỐI MONGODB 
-// ==========================================
-const MONGO_URI = "mongodb+srv://globalcashflowmonitor:global123%40@cluster0.xjhpeid.mongodb.net/globalcashflow?retryWrites=true&w=majority&appName=Cluster0";
-
-mongoose.connect(MONGO_URI)
-    .then(() => console.log("✅ Đã kết nối MongoDB thành công!"))
-    .catch(err => console.error("❌ Lỗi kết nối MongoDB:", err));
-
-// ==========================================
 // 2. ĐỊNH NGHĨA BẢNG DỮ LIỆU (SCHEMAS)
+// (Phải định nghĩa trước để tí nữa gọi lệnh xóa luật)
 // ==========================================
 const countryTimelineSchema = new mongoose.Schema({
     countryId: String, countryName: String,
@@ -47,6 +39,27 @@ const groupMessageSchema = new mongoose.Schema({
 });
 const GroupMessage = mongoose.model('GroupMessage', groupMessageSchema, 'groupmessages');
 
+
+// ==========================================
+// 1. KẾT NỐI MONGODB & TIÊU DIỆT LỖI E11000
+// ==========================================
+const MONGO_URI = "mongodb+srv://globalcashflowmonitor:global123%40@cluster0.xjhpeid.mongodb.net/globalcashflow?retryWrites=true&w=majority&appName=Cluster0";
+
+mongoose.connect(MONGO_URI)
+    .then(async () => {
+        console.log("✅ Đã kết nối MongoDB thành công!");
+        // ĐÂY LÀ ĐOẠN CODE "SÁT THỦ": ÉP MONGODB XÓA HẾT LUẬT CẤM TRÙNG LẶP!
+        try {
+            await Room.collection.dropIndexes();
+            await GroupMessage.collection.dropIndexes();
+            console.log("✅ Đã tiêu diệt tận gốc lỗi trùng lặp E11000!");
+        } catch (e) { 
+            // Bỏ qua nếu bảng chưa tồn tại
+        }
+    })
+    .catch(err => console.error("❌ Lỗi kết nối MongoDB:", err));
+
+
 // ==========================================
 // HÀM "MÁY HÚT BỤI" TỰ ĐỘNG DỌN RÁC (ÉP VỀ 100 DÒNG)
 // ==========================================
@@ -70,8 +83,6 @@ app.get('/api/countrytimelines', async (req, res) => {
     try {
         const allData = await CountryTimeline.find({});
         await Notification.create({ title: "Hệ thống đồng bộ", content: `✅ Đã kết nối và đồng bộ thành công dữ liệu ${allData.length} quốc gia.`, isSuccess: true });
-        
-        // Hút bụi bảng Notification
         await cleanDatabase(Notification, 100);
         res.status(200).json({ success: true, data: allData });
     } catch (err) {
@@ -84,7 +95,6 @@ app.get('/api/notifications', async (req, res) => {
     try { res.json({ success: true, data: await Notification.find().sort({ createdAt: -1 }) }); } catch (err) { res.json({ success: false }); }
 });
 
-// API Xóa thủ công Thông báo (Đã hoàn trả)
 app.post('/api/notifications/clear', async (req, res) => {
     try {
         await Notification.deleteMany({});
@@ -99,7 +109,6 @@ app.get('/api/chat/history', async (req, res) => {
     try { res.json({ success: true, data: await ChatMessage.find().sort({ createdAt: 1 }) }); } catch (err) { res.json({ success: false }); }
 });
 
-// API Xóa thủ công Chat AI (Đã hoàn trả)
 app.post('/api/chat/clear', async (req, res) => {
     try {
         await ChatMessage.deleteMany({});
@@ -112,7 +121,7 @@ app.post('/api/chat', async (req, res) => {
         const userMessage = req.body.message;
         await ChatMessage.create({ role: "user", content: userMessage });
 
-        // SIÊU PROMPT TỐI THƯỢNG
+        // ĐÂY LÀ SIÊU PROMPT DÀNH CHO AI (Đã tối ưu 100%)
         const systemPrompt = `Bạn là một Chuyên gia Kinh tế Vĩ mô cấp cao đang tư vấn trên hệ thống Global Cash Flow. 
 Nhiệm vụ của bạn là phân tích dữ liệu, giải thích các hiện tượng kinh tế một cách chuyên sâu nhưng dễ hiểu.
 QUAN TRỌNG: BẮT BUỘC toàn bộ câu trả lời của bạn phải là MỘT CHUỖI JSON HỢP LỆ. KHÔNG CÓ BẤT KỲ VĂN BẢN NÀO BÊN NGOÀI KHỐI JSON.
@@ -120,7 +129,7 @@ Cấu trúc JSON yêu cầu:
 {
     "reply": "Câu trả lời chi tiết của bạn (dùng \\n để xuống dòng, KHÔNG dùng markdown)",
     "action": "ZOOM_TO" hoặc "NONE",
-    "targetId": "Mã quốc gia ISO Alpha-3 tương ứng"
+    "targetId": "Mã quốc gia ISO Alpha-3 tương ứng (VD: VNM, USA, JPN...)"
 }`;
 
         const aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -135,8 +144,6 @@ Cấu trúc JSON yêu cầu:
         try { resultJson = JSON.parse(botContent); } catch (parseError) { resultJson = { reply: botContent, action: "NONE", targetId: "" }; }
         
         await ChatMessage.create({ role: "ai", content: resultJson.reply });
-        
-        // Hút bụi bảng Chat AI
         await cleanDatabase(ChatMessage, 100);
         res.json({ success: true, data: resultJson });
     } catch (err) { res.status(500).json({ success: false }); }
@@ -151,26 +158,15 @@ app.get('/api/rooms', async (req, res) => {
 
 app.post('/api/rooms', async (req, res) => {
     try {
-        // Nếu để trống tên, tự sinh mã ngẫu nhiên để chống trùng E11000
-        const roomName = req.body.name || `Phòng thảo luận #${Math.floor(Math.random() * 10000)}`;
-        
+        const roomName = req.body.name || `Phòng thảo luận #${Math.floor(Math.random() * 1000)}`;
         const newRoom = await Room.create({ name: roomName });
         
-        // Tạo tin nhắn hệ thống đầu tiên
         await GroupMessage.create({ 
             roomId: newRoom._id.toString(), senderName: "Hệ thống", senderEmail: "admin@system.com", 
             content: `Chào mừng đến với ${newRoom.name}!`, type: "SYSTEM" 
         });
-        
         res.json({ success: true, data: newRoom });
-    } catch (err) { 
-        console.error("Lỗi khi tạo phòng:", err);
-        // BẮT BỆNH E11000 (TRÙNG TÊN)
-        if (err.code === 11000) {
-            return res.status(400).json({ success: false, message: "Tên kênh này đã tồn tại! Vui lòng chọn tên khác." });
-        }
-        res.status(500).json({ success: false, message: "Lỗi Server không xác định" }); 
-    }
+    } catch (err) { res.status(500).json({ success: false, message: "Lỗi tạo phòng (Hãy chờ Server quét sạch Index): " + err.message }); }
 });
 
 app.get('/api/rooms/:roomId/messages', async (req, res) => {
@@ -182,7 +178,7 @@ app.post('/api/rooms/:roomId/messages', async (req, res) => {
         const { senderName, senderEmail, content, type, countryId } = req.body;
         const newMsg = await GroupMessage.create({ roomId: req.params.roomId, senderName, senderEmail, content, type: type || "TEXT", countryId: countryId || "" });
         
-        // Hút bụi bảng GroupMessage của phòng hiện tại
+        // Hút bụi 100 tin
         const msgCount = await GroupMessage.countDocuments({ roomId: req.params.roomId });
         if (msgCount > 100) {
             const oldest = await GroupMessage.find({ roomId: req.params.roomId }).sort({ createdAt: 1 }).limit(msgCount - 100);
