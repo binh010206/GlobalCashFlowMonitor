@@ -151,7 +151,9 @@ app.get('/api/rooms', async (req, res) => {
 
 app.post('/api/rooms', async (req, res) => {
     try {
-        const roomName = req.body.name || "Phòng thảo luận mới";
+        // Nếu để trống tên, tự sinh mã ngẫu nhiên để chống trùng E11000
+        const roomName = req.body.name || `Phòng thảo luận #${Math.floor(Math.random() * 10000)}`;
+        
         const newRoom = await Room.create({ name: roomName });
         
         // Tạo tin nhắn hệ thống đầu tiên
@@ -159,8 +161,16 @@ app.post('/api/rooms', async (req, res) => {
             roomId: newRoom._id.toString(), senderName: "Hệ thống", senderEmail: "admin@system.com", 
             content: `Chào mừng đến với ${newRoom.name}!`, type: "SYSTEM" 
         });
+        
         res.json({ success: true, data: newRoom });
-    } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+    } catch (err) { 
+        console.error("Lỗi khi tạo phòng:", err);
+        // BẮT BỆNH E11000 (TRÙNG TÊN)
+        if (err.code === 11000) {
+            return res.status(400).json({ success: false, message: "Tên kênh này đã tồn tại! Vui lòng chọn tên khác." });
+        }
+        res.status(500).json({ success: false, message: "Lỗi Server không xác định" }); 
+    }
 });
 
 app.get('/api/rooms/:roomId/messages', async (req, res) => {
