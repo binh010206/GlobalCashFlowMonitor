@@ -68,6 +68,21 @@ async function cleanDatabase(Model, limit = 100) {
     } catch (err) { console.error(`❌ Lỗi khi dọn dẹp:`, err); }
 }
 
+const chatSessionSchema = new mongoose.Schema({
+    email: String,
+    title: String,
+    createdAt: { type: Date, default: Date.now }
+});
+const ChatSession = mongoose.model('ChatSession', chatSessionSchema);
+
+const sessionMessageSchema = new mongoose.Schema({
+    sessionId: String,
+    role: String,
+    content: String,
+    createdAt: { type: Date, default: Date.now }
+});
+const SessionMessage = mongoose.model('SessionMessage', sessionMessageSchema);
+
 
 app.get('/api/countrytimelines', async (req, res) => {
     try {
@@ -192,3 +207,72 @@ app.get('/api/stats', async (req, res) => {
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🚀 Server Vĩ Mô đang chạy tại cổng ${PORT}`));
+
+// Lấy danh sách tiêu đề gói (Cho Bottom Sheet lịch sử)
+app.get('/api/ai/sessions', async (req, res) => {
+    try {
+        const { email } = req.query;
+        const sessions = await ChatSession.find({ email }).sort({ createdAt: -1 });
+        res.json({ success: true, data: sessions });
+    } catch (err) { res.status(500).json({ success: false }); }
+});
+
+// Tạo cuộc trò chuyện mới
+app.post('/api/ai/sessions', async (req, res) => {
+    try {
+        const { email, firstMessage } = req.body;
+        // Tự động trích xuất tiêu đề từ tin nhắn đầu, giới hạn độ dài cho đẹp
+        const title = firstMessage.length > 35 ? firstMessage.substring(0, 35) + "..." : firstMessage;
+        const newSession = await ChatSession.create({ email, title });
+        res.json({ success: true, data: newSession });
+    } catch (err) { res.status(500).json({ success: false }); }
+});
+
+// Lấy lịch sử tin nhắn của một gói cụ thể
+app.get('/api/ai/sessions/:sessionId/messages', async (req, res) => {
+    try {
+        const messages = await SessionMessage.find({ sessionId: req.params.sessionId }).sort({ createdAt: 1 });
+        res.json({ success: true, data: messages });
+    } catch (err) { res.status(500).json({ success: false }); }
+});
+
+// Chat AI theo gói
+app.post('/api/ai/chat-in-session', async (req, res) => {
+    try {
+        const { sessionId, message } = req.body;
+
+        // Lưu tin nhắn người dùng
+        await SessionMessage.create({ sessionId, role: "user", content: message });
+
+        const systemPrompt = `Bạn là một Chuyên gia Kinh tế Vĩ mô cấp cao đang tư vấn trên hệ thống Global Cash Flow.
+Nhiệm vụ của bạn là phân tích dữ liệu, giải thích các hiện tượng kinh tế một cách chuyên sâu nhưng dễ hiểu.
+QUAN TRỌNG: BẮT BUỘC toàn bộ câu trả lời của bạn phải là MỘT CHUỖI JSON HỢP LỆ. KHÔNG CÓ BẤT KỲ VĂN BẢN NÀO BÊN NGOÀI KHỐI JSON.
+Cấu trúc JSON yêu cầu:
+{
+    "reply": "Câu trả lời chi tiết của bạn (dùng \\n để xuống dòng, KHÔNG dùng markdown)",
+    "action": "ZOOM_TO" hoặc "NONE",
+    "targetId": "Mã quốc gia ISO Alpha-3 tương ứng (VD: VNM, USA, JPN...)"
+}`;
+
+        const aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ model: "openrouter/auto", messages: [ { role: "system", content: systemPrompt }, { role: "user", content: message } ] })
+        });
+
+        const data = await aiResponse.json();
+        let botContent = data.choices[0].message.content.replace(/```json/gi, "").replace(/```/gi, "").trim();
+
+        let resultJson;
+        try {
+            resultJson = JSON.parse(botContent);
+        } catch (parseError) {
+            resultJson = { reply: botContent, action: "NONE", targetId: "" };
+        }
+
+        // Lưu câu trả lời của AI
+        await SessionMessage.create({ sessionId, role: "ai", content: resultJson.reply });
+
+        res.json({ success: true, data: resultJson });
+    } catch (err) { res.status(500).json({ success: false }); }
+});
